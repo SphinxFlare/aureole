@@ -7,28 +7,26 @@ export interface Profile {
     name: string;
     age: number;
     bio: string;
-    imageUrl: string;
     distance?: string;
     compatibility?: number;
+    photos: string[]; 
   }
 
+// src/types/types.ts
 export interface Match {
-  match_id: string;
+  // server returns these exact fields
   user_id: string;
-  partner_id: string; 
-  name: string;
-  age: number;
-  bio: string;
-  imageUrl: string | null;
-  compatibility: number;
-  is_active: boolean;
-  is_verified: boolean;
-  mutual_interests: string[];
-  common_values: string[];
-  last_active_at: string;
-  last_message_preview: string | null;
-  conversation_starters: string[];
-} 
+  full_name: string;
+  age: number | null;
+  avatar: string | null;
+  mini_traits: string[];          // small list of trait keywords
+  ai_summary: string;             // 2-3 line AI summary
+  compatibility_reason: string;   // cached text (may be empty)
+  conversation_starter: string;   // cached starter or "" (last message override happens server-side)
+  last_active: string | null;     // ISO timestamp or null
+  is_online: boolean;
+}
+
 
 // UI Message type (used in Redux and components)
 export interface Message {

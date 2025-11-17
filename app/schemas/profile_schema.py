@@ -24,6 +24,7 @@ class UserProfileOut(BaseModel):
     bio: Optional[str]
     ai_summary: Optional[str]
     is_verified: bool
+    profile_photo: Optional[str] = None 
     media: List[MediaOut] = []
     stats: Optional[dict] = None
 

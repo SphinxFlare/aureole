@@ -1,21 +1,166 @@
-// src/pages/Auth.tsx
+// // src/pages/Auth.tsx
 
 
+// import { useState, useEffect } from "react";
+// import {jwtDecode} from "jwt-decode";
+// import { useNavigate } from "react-router-dom";
+// import { Button } from "@/components/ui/button";
+// import { Input } from "@/components/ui/input";
+// import { Label } from "@/components/ui/label";
+// import { useToast } from "@/hooks/use-toast";
+// import { useDispatch } from "react-redux";
+// import { setAuth } from "@/redux/slices/authSlice";
+// import { login as loginService, signup as signupService, getMyProfile } from "@/services/authService";
+// import { motion } from "framer-motion";
+// import Plasma from "@/components/Plasma";
+
+// const Auth = () => {
+//   const [isLogin, setIsLogin] = useState(true);
+//   const [email, setEmail] = useState("");
+//   const [phone, setPhone] = useState("");
+//   const [password, setPassword] = useState("");
+//   const [loading, setLoading] = useState(false);
+
+//   const navigate = useNavigate();
+//   const { toast } = useToast();
+//   const dispatch = useDispatch();
+
+//   // Auth-only theme flag
+//   useEffect(() => {
+//     localStorage.setItem("auth_theme_enabled", "1");
+//     return () => localStorage.removeItem("auth_theme_enabled");
+//   }, []);
+
+//   const handleSubmit = async (e: React.FormEvent) => {
+//     e.preventDefault();
+//     setLoading(true);
+
+//     try {
+//       if (isLogin) {
+//         // LOGIN (URL-encoded)
+//         const res = await loginService(email, password);
+//         const { access_token } = res;
+//         if (!access_token) throw new Error("No access token returned");
+
+//         const decoded: any = jwtDecode(access_token);
+//         const user = { id: decoded.user_id, email };
+
+//         // set token + user in redux (avatar default applied by slice)
+//         dispatch(setAuth({ token: access_token, user }));
+
+//         // fetch profile with token and decide redirect
+//         const profileRes = await getMyProfile(access_token);
+//         if (profileRes.exists) {
+//           // if profile includes avatar or extra fields, update user
+//           dispatch(
+//             // @ts-ignore
+//             (dispatch as any)( (d: any) =>
+//               d({ type: "auth/updateUser", payload: { avatar: profileRes.avatar } })
+//             )
+//           );
+//           toast({
+//             title: "Welcome back 🌟",
+//             description: "Redirecting to discovery...",
+//           });
+//           navigate("/discovery");
+//         } else {
+//           toast({
+//             title: "Welcome!",
+//             description: "Redirecting to profile setup...",
+//           });
+//           navigate("/onboarding");
+//         }
+//       } else {
+//         // SIGNUP (JSON)
+//         const res = await signupService(email, phone, password);
+//         const { user_id } = res;
+//         toast({
+//           title: "Account created",
+//           description: "Please sign in to continue.",
+//         });
+
+//         // require explicit login: switch to login tab and prefill email
+//         setIsLogin(true);
+//         setPassword("");
+//         setEmail(email);
+//       }
+//     } catch (err: any) {
+//       toast({
+//         title: "Authentication failed",
+//         description: err.response?.data?.detail || err.message || "Please try again",
+//         variant: "destructive",
+//       });
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   return (
+//     <div className="relative min-h-screen flex items-center justify-center overflow-hidden text-white">
+//       {localStorage.getItem("auth_theme_enabled") && (
+//         <div className="absolute inset-0 -z-10">
+//           <Plasma color="#ff6b35" speed={0.6} direction="forward" scale={1.1} opacity={0.8} mouseInteractive={true} />
+//           <div className="absolute inset-0 bg-black/40" />
+//         </div>
+//       )}
+
+//       <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: "easeOut" }} className="relative z-10 w-full max-w-md px-4">
+//         <div className="backdrop-blur-xl bg-white/10 border border-white/20 shadow-2xl rounded-3xl px-8 py-10">
+//           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="text-center mb-10">
+//             <h1 className="text-5xl font-extrabold tracking-tight mb-2 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">Aureole</h1>
+//             <p className="text-sm text-white/60">Where souls connect ✨</p>
+//           </motion.div>
+
+//           <div className="flex mb-8 bg-white/10 rounded-full p-1 backdrop-blur-sm">
+//             <button onClick={() => setIsLogin(true)} className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all ${isLogin ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow-md" : "text-white/70 hover:text-white"}`}>Login</button>
+//             <button onClick={() => setIsLogin(false)} className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all ${!isLogin ? "bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-md" : "text-white/70 hover:text-white"}`}>Sign Up</button>
+//           </div>
+
+//           <form onSubmit={handleSubmit} className="space-y-5">
+//             <div>
+//               <Label htmlFor="email" className="text-white/80">Email</Label>
+//               <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:ring-2 focus:ring-sky-400" />
+//             </div>
+
+//             {!isLogin && (
+//               <div>
+//                 <Label htmlFor="phone" className="text-white/80">Phone</Label>
+//                 <Input id="phone" type="tel" placeholder="+91 9876543210" value={phone} onChange={(e) => setPhone(e.target.value)} required className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:ring-2 focus:ring-pink-400" />
+//               </div>
+//             )}
+
+//             <div>
+//               <Label htmlFor="password" className="text-white/80">Password</Label>
+//               <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:ring-2 focus:ring-indigo-400" />
+//             </div>
+
+//             <motion.div whileTap={{ scale: 0.97 }}>
+//               <Button type="submit" disabled={loading} className="w-full mt-2 bg-gradient-to-r from-indigo-500 to-sky-500 hover:from-indigo-400 hover:to-sky-400 text-white font-semibold rounded-full py-2 shadow-lg">
+//                 {loading ? "Connecting..." : isLogin ? "Sign In" : "Create Account"}
+//               </Button>
+//             </motion.div>
+//           </form>
+//         </div>
+//       </motion.div>
+//     </div>
+//   );
+// };
+
+// export default Auth;
+
 // src/pages/Auth.tsx
+
 import { useState } from "react";
-import { jwtDecode } from "jwt-decode";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { login as loginService, signup as signupService, getMyProfile } from "@/services/authService";
+import { jwtDecode } from "jwt-decode";
 import { useDispatch } from "react-redux";
 import { setAuth } from "@/redux/slices/authSlice";
-import axios from "axios";
-import { motion } from "framer-motion";
-import LiquidPlasma from "@/components/ui/LiquidEther"; // <-- use your saved component
-
-const BASE_URL = "http://127.0.0.1:8000/api/v1";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -23,122 +168,170 @@ const Auth = () => {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
-  const { toast } = useToast();
   const dispatch = useDispatch();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      if (isLogin) {
-        const params = new URLSearchParams();
-        params.append("username", email);
-        params.append("password", password);
-
-        const res = await axios.post(`${BASE_URL}/login`, params, {
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        });
-
-        const { access_token } = res.data;
-        const decoded: any = jwtDecode(access_token);
-        const user = { id: decoded.user_id };
-        dispatch(setAuth({ token: access_token, user }));
-
-        const profileRes = await axios.get(`${BASE_URL}/profile/me`, {
-          headers: { Authorization: `Bearer ${access_token}` },
-        });
-
-        if (profileRes.data.exists) {
+        e.preventDefault();
+        setLoading(true);
+    
+        try {
+          if (isLogin) {
+            // LOGIN (URL-encoded)
+            const res = await loginService(email, password);
+            const { access_token } = res;
+            if (!access_token) throw new Error("No access token returned");
+    
+            const decoded: any = jwtDecode(access_token);
+            const user = { id: decoded.user_id, email };
+    
+            // set token + user in redux (avatar default applied by slice)
+            dispatch(setAuth({ token: access_token, user }));
+    
+            // fetch profile with token and decide redirect
+            const profileRes = await getMyProfile(access_token);
+            if (profileRes.exists) {
+              // if profile includes avatar or extra fields, update user
+              dispatch(
+                // @ts-ignore
+                (dispatch as any)( (d: any) =>
+                  d({ type: "auth/updateUser", payload: { avatar: profileRes.avatar } })
+                )
+              );
+              toast({
+                title: "Welcome back 🌟",
+                description: "Redirecting to discovery...",
+              });
+              navigate("/discovery");
+            } else {
+              toast({
+                title: "Welcome!",
+                description: "Redirecting to profile setup...",
+              });
+              navigate("/onboarding");
+            }
+          } else {
+            // SIGNUP (JSON)
+            const res = await signupService(email, phone, password);
+            const { user_id } = res;
+            toast({
+              title: "Account created",
+              description: "Please sign in to continue.",
+            });
+    
+            // require explicit login: switch to login tab and prefill email
+            setIsLogin(true);
+            setPassword("");
+            setEmail(email);
+          }
+        } catch (err: any) {
           toast({
-            title: "Welcome back 🌟",
-            description: "Redirecting to discovery...",
+            title: "Authentication failed",
+            description: err.response?.data?.detail || err.message || "Please try again",
+            variant: "destructive",
           });
-          navigate("/discovery");
-        } else {
-          toast({
-            title: "Welcome!",
-            description: "Redirecting to profile setup...",
-          });
-          navigate("/onboarding");
+        } finally {
+          setLoading(false);
         }
-      } else {
-        const res = await axios.post(`${BASE_URL}/signup`, {
-          email,
-          phone,
-          password,
-        });
-
-        const { user_id } = res.data;
-        const user = { id: user_id };
-        dispatch(setAuth({ token: "", user }));
-
-        toast({
-          title: "Welcome to Aureole ✨",
-          description: "Redirecting to profile setup...",
-        });
-
-        navigate("/profile/setup");
-      }
-    } catch (err: any) {
-      toast({
-        title: "Authentication failed",
-        description: err.response?.data?.detail || "Please try again",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+      };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden bg-[#050014] text-white">
-      {/* Liquid Ether background */}
-      <div className="absolute inset-0 -z-10">
-      <LiquidPlasma colors={["#5227FF", "#FF9FFC", "#B19EEF"]} speed={0.4} />
+    <div className="relative w-full h-screen overflow-hidden bg-black text-white">
+
+      {/* CYAN / AQUA Aurora Background */}
+      <div className="
+        absolute inset-0 
+        bg-[radial-gradient(circle_at_20%_20%,rgba(0,255,255,0.3),transparent),
+            radial-gradient(circle_at_80%_60%,rgba(0,150,255,0.28),transparent),
+            radial-gradient(circle_at_50%_90%,rgba(0,200,255,0.22),transparent)]
+        animate-cyanMesh
+      " />
+
+      {/* Aurora Waves */}
+      <motion.div
+        className="absolute inset-0 opacity-40"
+        animate={{
+          backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+        }}
+        transition={{
+          duration: 18,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        style={{
+          backgroundImage:
+            "linear-gradient(115deg, rgba(0,255,255,0.25), rgba(0,80,255,0.2), rgba(0,255,200,0.25))",
+          backgroundSize: "200% 200%",
+        }}
+      />
+
+      {/* Floating Cyan Particles */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {[...Array(45)].map((_, i) => (
+          <motion.span
+            key={i}
+            className="absolute rounded-full bg-cyan-300/20 blur-xl"
+            style={{
+              width: Math.random() * 45 + 10,
+              height: Math.random() * 45 + 10,
+              top: Math.random() * 100 + "%",
+              left: Math.random() * 100 + "%",
+            }}
+            animate={{
+              y: ["0px", "-80px", "0px"],
+              opacity: [0.25, 0.9, 0.25],
+              scale: [1, 1.4, 1],
+            }}
+            transition={{
+              duration: Math.random() * 8 + 6,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+        ))}
       </div>
 
-      {/* Form container */}
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="relative z-10 w-full max-w-md"
-      >
-        <div className="backdrop-blur-xl bg-white/10 border border-white/20 shadow-2xl rounded-3xl px-8 py-10">
+      {/* Main Panel */}
+      <div className="relative z-10 flex items-center justify-center h-full px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="w-full max-w-md backdrop-blur-2xl bg-white/10 border border-white/20 rounded-3xl p-10 shadow-[0_0_50px_rgba(0,255,255,0.15)]"
+        >
+          {/* Branding */}
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
             className="text-center mb-10"
           >
-            <h1 className="text-5xl font-extrabold tracking-tight mb-2 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
+            <h1 className="text-6xl font-black bg-gradient-to-r from-cyan-300 to-blue-400 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(0,255,255,0.4)]">
               Aureole
             </h1>
-            <p className="text-sm text-white/60">
-              Where souls connect under the same sky ✨
-            </p>
+            <p className="text-white/70 text-sm">Where real connections begin 💫</p>
           </motion.div>
 
-          {/* Login / Sign Up toggle */}
-          <div className="flex mb-8 bg-white/10 rounded-full p-1 backdrop-blur-sm">
+          {/* Toggle */}
+          <div className="flex mb-8 bg-white/10 rounded-full p-1 backdrop-blur-md">
             <button
               onClick={() => setIsLogin(true)}
-              className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all ${
+              className={`flex-1 py-2 rounded-full font-semibold transition-all ${
                 isLogin
-                  ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow-md"
-                  : "text-white/70 hover:text-white"
+                  ? "bg-gradient-to-r from-cyan-400 to-blue-500 text-white shadow-lg"
+                  : "text-white/60 hover:text-white"
               }`}
             >
               Login
             </button>
             <button
               onClick={() => setIsLogin(false)}
-              className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all ${
+              className={`flex-1 py-2 rounded-full font-semibold transition-all ${
                 !isLogin
-                  ? "bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-md"
-                  : "text-white/70 hover:text-white"
+                  ? "bg-gradient-to-r from-blue-400 to-cyan-500 text-white shadow-lg"
+                  : "text-white/60 hover:text-white"
               }`}
             >
               Sign Up
@@ -148,49 +341,43 @@ const Auth = () => {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <Label htmlFor="email" className="text-white/80">
-                Email
-              </Label>
+              <Label htmlFor="email" className="text-white/90">Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
                 value={email}
+                placeholder="you@example.com"
                 onChange={(e) => setEmail(e.target.value)}
+                className="bg-white/10 text-white border-white/20 placeholder:text-white/40"
                 required
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:ring-2 focus:ring-sky-400"
               />
             </div>
 
             {!isLogin && (
               <div>
-                <Label htmlFor="phone" className="text-white/80">
-                  Phone
-                </Label>
+                <Label htmlFor="phone" className="text-white/90">Phone</Label>
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="+91 9876543210"
                   value={phone}
+                  placeholder="+91 9876543210"
                   onChange={(e) => setPhone(e.target.value)}
+                  className="bg-white/10 text-white border-white/20 placeholder:text-white/40"
                   required
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:ring-2 focus:ring-pink-400"
                 />
               </div>
             )}
 
             <div>
-              <Label htmlFor="password" className="text-white/80">
-                Password
-              </Label>
+              <Label htmlFor="password" className="text-white/90">Password</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
                 value={password}
+                placeholder="••••••••"
                 onChange={(e) => setPassword(e.target.value)}
+                className="bg-white/10 text-white border-white/20 placeholder:text-white/40"
                 required
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:ring-2 focus:ring-indigo-400"
               />
             </div>
 
@@ -198,223 +385,16 @@ const Auth = () => {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-2 bg-gradient-to-r from-indigo-500 to-sky-500 hover:from-indigo-400 hover:to-sky-400 text-white font-semibold rounded-full py-2 shadow-lg"
+                className="w-full bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-black font-semibold rounded-full py-3 shadow-[0_0_20px_rgba(0,255,255,0.45)]"
               >
-                {loading
-                  ? "Connecting..."
-                  : isLogin
-                  ? "Sign In"
-                  : "Create Account"}
+                {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
               </Button>
             </motion.div>
           </form>
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 };
 
 export default Auth;
-
-
-// import { useState } from 'react';
-// import { useNavigate } from 'react-router-dom';
-// import { Button } from '@/components/ui/button';
-// import { Input } from '@/components/ui/input';
-// import { Label } from '@/components/ui/label';
-// import CosmicBackground from '@/components/CosmicBackground';
-// import { mockLogin, mockSignup, mockSocialLogin, saveAuth } from '@/utils/auth';
-// import { useToast } from '@/hooks/use-toast';
-
-// const Auth = () => {
-//   const [isLogin, setIsLogin] = useState(true);
-//   const [email, setEmail] = useState('');
-//   const [password, setPassword] = useState('');
-//   const [loading, setLoading] = useState(false);
-//   const navigate = useNavigate();
-//   const { toast } = useToast();
-
-//   const handleSubmit = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     setLoading(true);
-
-//     try {
-//       const { user, token } = isLogin 
-//         ? await mockLogin(email, password)
-//         : await mockSignup(email, password);
-      
-//       saveAuth(token, user);
-      
-//       toast({
-//         title: isLogin ? "Welcome back! 🌟" : "Welcome to Aureole! ✨",
-//         description: "Redirecting to verification...",
-//       });
-      
-//       navigate('/verify-selfie');
-//     } catch (error) {
-//       toast({
-//         title: "Authentication failed",
-//         description: "Please try again",
-//         variant: "destructive",
-//       });
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const handleSocialLogin = async (provider: 'google' | 'apple') => {
-//     setLoading(true);
-//     try {
-//       const { user, token } = await mockSocialLogin(provider);
-//       saveAuth(token, user);
-      
-//       toast({
-//         title: `Connected with ${provider === 'google' ? 'Google' : 'Apple'}! 🌟`,
-//         description: "Redirecting to verification...",
-//       });
-      
-//       navigate('/verify-selfie');
-//     } catch (error) {
-//       toast({
-//         title: "Connection failed",
-//         description: "Please try again",
-//         variant: "destructive",
-//       });
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div className="min-h-screen relative flex items-center justify-center p-4">
-//       <CosmicBackground />
-      
-//       <div className="relative z-10 w-full max-w-md">
-//         <div className="glass-card p-8 rounded-2xl border border-white/10">
-//           {/* Header */}
-//           <div className="text-center mb-8">
-//             <h1 className="text-4xl font-bold text-cosmic mb-2">Aureole</h1>
-//             <p className="text-muted-foreground">Where souls connect under the same sky</p>
-//           </div>
-
-//           {/* Tab Switcher */}
-//           <div className="flex gap-2 mb-6 p-1 glass-card rounded-lg">
-//             <button
-//               onClick={() => setIsLogin(true)}
-//               className={`flex-1 py-2 px-4 rounded-md transition-all ${
-//                 isLogin 
-//                   ? 'bg-primary text-primary-foreground' 
-//                   : 'text-muted-foreground hover:text-foreground'
-//               }`}
-//             >
-//               Login
-//             </button>
-//             <button
-//               onClick={() => setIsLogin(false)}
-//               className={`flex-1 py-2 px-4 rounded-md transition-all ${
-//                 !isLogin 
-//                   ? 'bg-primary text-primary-foreground' 
-//                   : 'text-muted-foreground hover:text-foreground'
-//               }`}
-//             >
-//               Sign Up
-//             </button>
-//           </div>
-
-//           {/* Form */}
-//           <form onSubmit={handleSubmit} className="space-y-4 mb-6">
-//             <div className="space-y-2">
-//               <Label htmlFor="email">Email</Label>
-//               <Input
-//                 id="email"
-//                 type="email"
-//                 placeholder="you@example.com"
-//                 value={email}
-//                 onChange={(e) => setEmail(e.target.value)}
-//                 required
-//                 className="glass-input"
-//               />
-//             </div>
-
-//             <div className="space-y-2">
-//               <Label htmlFor="password">Password</Label>
-//               <Input
-//                 id="password"
-//                 type="password"
-//                 placeholder="••••••••"
-//                 value={password}
-//                 onChange={(e) => setPassword(e.target.value)}
-//                 required
-//                 className="glass-input"
-//               />
-//             </div>
-
-//             <Button 
-//               type="submit" 
-//               className="w-full cosmic-glow"
-//               disabled={loading}
-//             >
-//               {loading ? 'Connecting...' : (isLogin ? 'Sign In' : 'Create Account')}
-//             </Button>
-//           </form>
-
-//           {/* Divider */}
-//           <div className="relative mb-6">
-//             <div className="absolute inset-0 flex items-center">
-//               <div className="w-full border-t border-white/10"></div>
-//             </div>
-//             <div className="relative flex justify-center text-xs uppercase">
-//               <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
-//             </div>
-//           </div>
-
-//           {/* Social Login */}
-//           <div className="space-y-3">
-//             <Button
-//               type="button"
-//               variant="outline"
-//               className="w-full"
-//               onClick={() => handleSocialLogin('google')}
-//               disabled={loading}
-//             >
-//               <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-//                 <path
-//                   fill="currentColor"
-//                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-//                 />
-//                 <path
-//                   fill="currentColor"
-//                   d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-//                 />
-//                 <path
-//                   fill="currentColor"
-//                   d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-//                 />
-//                 <path
-//                   fill="currentColor"
-//                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-//                 />
-//               </svg>
-//               Continue with Google
-//             </Button>
-
-//             <Button
-//               type="button"
-//               variant="outline"
-//               className="w-full"
-//               onClick={() => handleSocialLogin('apple')}
-//               disabled={loading}
-//             >
-//               <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-//                 <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
-//               </svg>
-//               Continue with Apple
-//             </Button>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default Auth;

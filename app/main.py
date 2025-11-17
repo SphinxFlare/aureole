@@ -18,6 +18,7 @@ from routers.interaction_router import router as interaction_router
 from routers.coversation_router import router as conversation_router
 from routers.notification_ws import router as notification_ws_router
 from routers.profile import router as profile
+from routers.insights_router import router as insight_router
 
 
 app = FastAPI(
@@ -69,6 +70,7 @@ app.include_router(report_router, prefix="/api/v1")
 app.include_router(interaction_router, prefix="/api/v1")
 app.include_router(conversation_router, prefix="/api/v1")
 app.include_router(profile, prefix="/api/v1")
+app.include_router(insight_router, prefix="/api/v1")
 # Include WebSocket router
 app.include_router(ws_router)
 app.include_router(notification_ws_router)

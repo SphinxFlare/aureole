@@ -9,6 +9,7 @@ import {
   UserProfile,
   Media,
 } from "@/services/userSevice";
+import { setAvatar } from "@/services/userSevice";
 
 interface UserState {
     user: UserProfile | null;
@@ -44,6 +45,18 @@ interface UserState {
         return res; // ✅ must return res.data from service
       } catch (err: any) {
         console.error("Thunk upload error:", err);
+        return rejectWithValue(err.response?.data || err.message);
+      }
+    }
+  );
+  
+  export const setUserAvatar = createAsyncThunk(
+    "user/setUserAvatar",
+    async (mediaId: string, { rejectWithValue }) => {
+      try {
+        const res = await setAvatar(mediaId); 
+        return res.avatar; // backend returns { msg, avatar }
+      } catch (err: any) {
         return rejectWithValue(err.response?.data || err.message);
       }
     }
@@ -100,7 +113,13 @@ interface UserState {
           if (state.user) {
             state.user.ai_summary = action.payload.ai_summary;
           }
-        });
+        })
+        .addCase(setUserAvatar.fulfilled, (state, action: PayloadAction<string>) => {
+          if (state.user) {
+            state.user.profile_photo = action.payload;
+          }
+        })
+        ;
     },
   });
   

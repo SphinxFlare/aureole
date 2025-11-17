@@ -4,7 +4,7 @@ import json
 import uuid
 from fastapi import HTTPException
 from datetime import datetime, timezone
-from openai import AsyncOpenAI
+from db.session import client
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from models.profile_model import Profile, AIUsage
@@ -12,16 +12,16 @@ from utils.premium_utils import is_premium_user
 from models.message_model import Message
 from models.user_model import Notification, User
 from utils.config import settings
+from utils.prompts import AI_PROFILE_SYSTEM_PROMPT, make_compatibility_user_prompt, make_single_user_prompt
 from services.notification_service import create_and_push_notification
 
-client = AsyncOpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=settings.OPENAI_API_KEY
-)
+
 
 MAX_DAILY_FREE = 3
 
+
 async def run_ai_profile_process(db: AsyncSession, user):
+    # --- Fetch profile ---
     result = await db.execute(select(Profile).where(Profile.user_id == user.id))
     profile = result.scalar_one_or_none()
 
@@ -30,49 +30,40 @@ async def run_ai_profile_process(db: AsyncSession, user):
 
     raw = profile.raw_prompts
 
-    system_prompt = """
-        You are a dating profile expert. Analyze the user's inputs and return ONLY a JSON object with the following structure:
-       {
-        "summary": "A natural, friendly 2-3 line dating bio summarizing the user's personality, lifestyle, and what they are looking for.",
-        "preferences": {
-           "interests": ["list of interests, hobbies, activities, even if not explicitly stated"],
-           "values": ["core beliefs or values that might guide the user"],
-           "dealbreakers": ["things they likely prefer to avoid or cannot compromise on"]
-        },
-        "conversation_starters": ["3 engaging questions or topics to start a conversation with this user, based on their interests and values"]
-        }
+    # ---- Build prompts ----
+    system_prompt = AI_PROFILE_SYSTEM_PROMPT
+    user_prompt = make_single_user_prompt(raw)
 
-        Even if some fields in the user input are missing or sparse, infer intelligently and creatively. Make the suggestions realistic, friendly, and diverse.
-        """
+    # ---- AI Summarization ----
+    try:
+        chat_response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"},
+            timeout=30
+        )
+    except Exception as e:
+        raise RuntimeError(f"AI summary generation failed: {e}")
 
-    user_prompt = f"""
-             User profile inputs:
-             About me: {raw.get('about', '')}
-             Looking for: {raw.get('looking_for', '')}
-             Likes: {raw.get('likes', '')}
-             Dealbreakers: {raw.get('dealbreakers', '')}
+    # ---- Extract JSON ----
+    try:
+        ai_output = chat_response.choices[0].message.content
+        ai_data = json.loads(ai_output)
 
-             If a field is missing, infer reasonable details from what is provided.
-            """
+        summary = ai_data.get("summary", "").strip()
+        mini_traits = ai_data.get("mini_traits", [])
+        preferences = ai_data.get("preferences", {})
+    except Exception as e:
+        raise RuntimeError(f"AI returned invalid JSON: {e}")
 
-
-    chat_response = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        response_format={"type": "json_object"},
-        timeout=30
-    )
-
-    ai_output = chat_response.choices[0].message.content
-    ai_data = json.loads(ai_output)
-
-    summary = ai_data["summary"]
-    preferences = ai_data["preferences"]
-
+    # ---- Build embedding text ----
+    # Fully psychology-weighted embedding (much better for matching)
     emb_text = (
+        f"Summary: {summary} "
+        f"Traits: {', '.join(mini_traits)} "
         f"About: {raw.get('about', '')} "
         f"Looking for: {raw.get('looking_for', '')} "
         f"Interests: {', '.join(preferences.get('interests', []))} "
@@ -80,19 +71,30 @@ async def run_ai_profile_process(db: AsyncSession, user):
         f"Dealbreakers: {', '.join(preferences.get('dealbreakers', []))}"
     )
 
-    emb_response = await client.embeddings.create(
-        model="text-embedding-3-small",
-        input=emb_text,
-        encoding_format="float"
-    )
+    # ---- Create Embedding ----
+    try:
+        emb_response = await client.embeddings.create(
+            model="text-embedding-3-small",
+            input=emb_text,
+            encoding_format="float"
+        )
+        embedding = emb_response.data[0].embedding
+    except Exception as e:
+        raise RuntimeError(f"Embedding generation failed: {e}")
 
+    # ---- Update DB ----
     profile.ai_summary = summary
+    profile.mini_traits = mini_traits
     profile.preferences = preferences
-    profile.embedding = emb_response.data[0].embedding
+    profile.embedding = embedding
 
     await db.commit()
-    return {"summary": summary, "preferences": preferences}
 
+    return {
+        "summary": summary,
+        "mini_traits": mini_traits,
+        "preferences": preferences
+    }
 
 
 async def generate_ai_replies_service(db: AsyncSession, user_id: str, message_id: str, tone: str):

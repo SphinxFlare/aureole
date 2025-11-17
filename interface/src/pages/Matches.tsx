@@ -1,16 +1,16 @@
 // src/pages/Matches.tsx
-
 import { useEffect, useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Sparkles } from "lucide-react";
 import CosmicBackground from "@/components/CosmicBackground";
+import { getAvatar } from "@/utils/avatar";
 import { useNavigate } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
+import { useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "@/redux/store";
 import { fetchMatches } from "@/redux/slices/friendSlice";
-import { useAppSelector } from '@/redux/hooks';
-
+import { useAppSelector } from "@/redux/hooks";
+import AvatarCosmic from "@/components/AvatarCosmic";
 
 const Matches = () => {
   const navigate = useNavigate();
@@ -18,16 +18,20 @@ const Matches = () => {
   const { user } = useAppSelector((state: RootState) => state.auth);
   const [starburstMatch, setStarburstMatch] = useState<string | null>(null);
 
-  const { matches, loading, error } = useSelector((state: RootState) => state.friends);
+  // matches slice kept as friends.matches or similar
+  const { matches, loading, error } = useAppSelector((state: RootState) => state.friends);
 
   useEffect(() => {
     dispatch(fetchMatches());
   }, [dispatch]);
 
-  // Deduplicate matches by partner_id
+  // Deduplicate by user_id (server should already be one-per-match, but just in case)
   const uniqueMatches = useMemo(() => {
     const map = new Map<string, typeof matches[0]>();
-    matches.forEach((m) => map.set(m.partner_id, m));
+    (matches || []).forEach((m) => {
+      if (!m) return;
+      map.set(m.user_id, m);
+    });
     return Array.from(map.values());
   }, [matches]);
 
@@ -42,6 +46,7 @@ const Matches = () => {
       navigate(`/chat/${partnerId}`);
     }, 800);
   };
+  
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -51,7 +56,7 @@ const Matches = () => {
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold mb-2 text-cosmic">
             <Sparkles className="inline-block w-8 h-8 mr-2 star-glow" />
-            Your Cosmic Matches
+            Matches
           </h1>
           <p className="text-muted-foreground">Souls aligned by the stars</p>
         </div>
@@ -60,128 +65,98 @@ const Matches = () => {
         {error && <p className="text-center text-red-500">{error}</p>}
 
         <div className="space-y-6">
-          {uniqueMatches.map((match) => (
-            <Card
-              key={match.partner_id}
-              className="glass-card cosmic-glow p-6 relative overflow-hidden group hover:scale-[1.02] transition-all duration-300"
-            >
-              {starburstMatch === match.partner_id && (
-                <div className="absolute inset-0 animate-particle-burst pointer-events-none z-20" />
-              )}
+          {uniqueMatches.length > 0 &&
+            uniqueMatches.map((match) => {
+              const lastMessagePreview = match.conversation_starter || "The stars haven’t aligned in conversation yet ✨";
+              const subtitle = (match.mini_traits && match.mini_traits.length > 0)
+                ? match.mini_traits.slice(0, 2).join(", ")
+                : "Cosmic compatibility";
 
-              <div className="flex flex-col md:flex-row gap-6">
-                {/* Profile Image */}
-                <div className="relative">
-                  <div className="w-32 h-32 rounded-full overflow-hidden ring-4 ring-primary/30 star-glow">
-                    <img
-                      src={match.imageUrl || "/default-avatar.png"}
-                      alt={match.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  {/* Verified Badge */}
-                  {match.is_verified && (
-                    <div className="absolute top-0 right-0 w-6 h-6 rounded-full bg-gradient-to-tr from-yellow-400 to-purple-500 flex items-center justify-center animate-pulse">
-                      <Sparkles className="w-3 h-3 text-white" />
-                    </div>
+              return (
+                <Card
+                  key={match.user_id}
+                  className="!bg-white/5 !border-white/10 rounded-2xl cosmic-glow p-4 
+                             hover:scale-[1.015] transition-all duration-300 overflow-hidden relative"
+                >
+                  {starburstMatch === match.user_id && (
+                    <div className="absolute inset-0 animate-particle-burst pointer-events-none z-20" />
                   )}
 
-                  {/* Online/Offline Indicator */}
-                  <div
-                    className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white ${
-                      match.is_active ? "bg-green-400" : "bg-gray-400"
-                    }`}
-                  />
+                  <div className="flex gap-4">
+                    <div className="relative w-20 h-20 shrink-0">
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-br 
+                          from-cyan-400 via-blue-500 to-purple-500 blur-md opacity-40" />
 
-                  {/* Compatibility Circle */}
-                  <div className="absolute -bottom-2 -left-2 w-16 h-16 rounded-full bg-gradient-cosmic flex items-center justify-center cosmic-glow font-bold text-lg">
-                    {Math.round(match.compatibility * 100)}%
-                  </div>
-                </div>
-
-                {/* Match Info */}
-                <div className="flex-1 space-y-4">
-                  <div>
-                    <h3 className="text-2xl font-bold text-cosmic mb-1">
-                      {match.name}, {match.age}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-2">{match.bio}</p>
-
-                    {/* Interests & Values */}
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {match.mutual_interests.map((interest) => (
-                        <span
-                          key={interest}
-                          className="px-3 py-1 rounded-full text-xs bg-primary/20 text-primary border border-primary/30 star-glow"
-                        >
-                          {interest}
-                        </span>
-                      ))}
-                      {match.common_values.map((value) => (
-                        <span
-                          key={value}
-                          className="px-3 py-1 rounded-full text-xs bg-secondary/20 text-secondary border border-secondary/30 star-glow"
-                        >
-                          {value}
-                        </span>
-                      ))}
+                      <AvatarCosmic
+                        src={getAvatar(match)}
+                        online={!!match.is_online}
+                        verified={false}
+                        size={90}
+                      />
                     </div>
 
-                    {/* Last Message */}
-                    <p className="text-sm italic text-muted-foreground">
-                      {match.last_message_preview
-                        ? match.last_message_preview
-                        : "The stars haven’t aligned in conversation yet ✨"}
-                    </p>
-                  </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-2xl font-bold text-cosmic">
+                          {match.full_name}, <span className="text-neutral-300">{match.age ?? ""}</span>
+                        </h3>
 
-                  {/* Conversation Starters */}
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-muted-foreground">
-                      Conversation Starters:
-                    </p>
-                    <div className="space-y-2">
-                      {match.conversation_starters.map((starter, idx) => (
-                        <div
-                          key={idx}
-                          className="text-sm p-2 rounded-lg bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 hover:border-primary/40 transition-colors cursor-pointer group/starter"
+                        <div className={`w-3 h-3 rounded-full ${match.is_online ? "bg-green-400" : "bg-gray-400"}`} />
+                      </div>
+
+                      <p className="text-sm text-gray-300 line-clamp-1">{match.ai_summary}</p>
+
+                      <p className="text-xs text-purple-300 mt-1 line-clamp-1">
+                        ✨ {subtitle}
+                      </p>
+
+                      <p className="text-sm text-blue-300 mt-1 line-clamp-1">
+                        💬 {lastMessagePreview}
+                      </p>
+
+                      <p className="text-xs text-gray-400 italic mt-1 line-clamp-1">
+                        {match.last_active ? new Date(match.last_active).toLocaleString() : "Last active unknown"}
+                      </p>
+
+                      <div className="flex gap-3 mt-3">
+                        <Button
+                          onClick={() => handleStartConversation(match.user_id)}
+                          size="sm"
+                          className="bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30 px-3 py-1.5 rounded-full"
                         >
-                          <span className="group-hover/starter:text-primary transition-colors">
-                            💫 {starter}
-                          </span>
-                        </div>
-                      ))}
+                          <MessageCircle className="w-4 h-4 mr-1" />
+                          Chat
+                        </Button>
+
+                        <Button
+                          onClick={() => navigate(`/profile/${match.user_id}`)}
+                          variant="outline"
+                          size="sm"
+                          className="text-white border-white/20 hover:bg-white/10 px-3 py-1.5 rounded-full"
+                        >
+                          View
+                        </Button>
+                      </div>
                     </div>
                   </div>
+                </Card>
+              );
+            })}
 
-                  {/* Action Button */}
-                  <Button
-                    onClick={() => handleStartConversation(match.partner_id)}
-                    className="w-full md:w-auto bg-gradient-cosmic hover:opacity-90 cosmic-glow"
-                    size="lg"
-                  >
-                    <MessageCircle className="w-4 h-4 mr-2" />
-                    Start Conversation
-                  </Button>
-                </div>
-              </div>
+          {/* EMPTY STATE */}
+          {uniqueMatches.length === 0 && !loading && (
+            <Card className="glass-card p-12 text-center rounded-2xl">
+              <Sparkles className="w-16 h-16 mx-auto mb-4 text-muted-foreground animate-twinkle" />
+              <h3 className="text-xl font-semibold mb-2">No matches yet</h3>
+              <p className="text-muted-foreground mb-6">
+                Keep swiping to find your cosmic connection
+              </p>
+              <Button onClick={() => navigate('/discovery')} variant="outline">
+                Go to Discovery
+              </Button>
             </Card>
-          ))}
+          )}
         </div>
-
-        {uniqueMatches.length === 0 && !loading && (
-          <Card className="glass-card p-12 text-center">
-            <Sparkles className="w-16 h-16 mx-auto mb-4 text-muted-foreground animate-twinkle" />
-            <h3 className="text-xl font-semibold mb-2">No matches yet</h3>
-            <p className="text-muted-foreground mb-6">
-              Keep swiping to find your cosmic connection
-            </p>
-            <Button onClick={() => navigate("/discovery")} variant="outline">
-              Go to Discovery
-            </Button>
-          </Card>
-        )}
       </div>
     </div>
   );

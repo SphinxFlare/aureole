@@ -16,6 +16,7 @@ class Profile(Base):
     user_id = Column(PG_UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
     raw_prompts = Column(JSON, nullable=True)        # e.g., {"about": "...", "looking_for": "..."}
     ai_summary = Column(Text, nullable=True)         # Natural language summary by OpenAI
+    mini_traits = Column(JSON, nullable=True)
     preferences = Column(JSON, nullable=True)        # Structured: {"interests": [...], "values": [...], "dealbreakers": [...]}
     embedding = Column(VECTOR(1536), nullable=True)  # OpenAI text-embedding-3-small
     last_edited_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)

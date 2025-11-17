@@ -1,6 +1,6 @@
 # services/recommend_service.py
 
-
+from typing import List, Optional
 import math
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -342,17 +342,15 @@ async def get_boosted_tier_recommendations(
     return matches[:limit]
 
 
+
 async def get_age_filtered_recommendations(
     db: AsyncSession,
     current_user: User,
     limit: int = 20,
     min_age: int = 18,
     max_age: int = 100,
+    gender: Optional[List[str]] = None,   # multi-select genders
 ) -> list[MatchResponse]:
-    """
-    Age-filtered recommendation (no location):
-    40% embedding similarity, 60% recency, optional premium boost.
-    """
 
     current_profile = await db.scalar(
         select(Profile).where(Profile.user_id == current_user.id)
@@ -360,6 +358,46 @@ async def get_age_filtered_recommendations(
     if not current_profile or current_profile.embedding is None:
         return []
 
+    # Base search conditions
+    conditions = [
+        User.id != current_user.id,
+        User.is_active.is_(True),
+        User.is_profile_hidden.is_(False),
+        User.age.between(min_age, max_age),
+        Profile.embedding.isnot(None),
+    ]
+
+    # ---------------------------------------------
+    # GENDER NORMALIZATION (FINAL FIX)
+    # ---------------------------------------------
+    CANONICAL = {
+        # frontend values
+        "men": "man",
+        "women": "woman",
+        "non-binary": "non-binary",
+
+        # DB variations
+        "man": "man",
+        "male": "man",
+
+        "woman": "woman",
+        "female": "woman",
+
+        # common variants
+        "nonbinary": "non-binary",
+        "nb": "non-binary",
+    }
+
+    if gender:
+        normalized = []
+        for g in gender:
+            key = g.lower().strip()
+            normalized.append(CANONICAL.get(key, key))
+        conditions.append(User.gender.in_(normalized))
+
+    # ---------------------------------------------
+    # Query
+    # ---------------------------------------------
     stmt = (
         select(
             User.id,
@@ -371,13 +409,7 @@ async def get_age_filtered_recommendations(
             (1 - Profile.embedding.l2_distance(current_profile.embedding)).label("similarity"),
         )
         .join(Profile, Profile.user_id == User.id)
-        .where(
-            User.id != current_user.id,
-            User.is_active.is_(True),
-            User.is_profile_hidden.is_(False),
-            User.age.between(min_age, max_age),
-            Profile.embedding.isnot(None),
-        )
+        .where(*conditions)
         .limit(500)
     )
 
@@ -386,6 +418,9 @@ async def get_age_filtered_recommendations(
     if not candidates:
         return []
 
+    # ---------------------------------------------
+    # Scoring
+    # ---------------------------------------------
     matches = []
     now = datetime.now(timezone.utc)
 
@@ -395,7 +430,11 @@ async def get_age_filtered_recommendations(
         recency_score = max(0.5, min(1.0, 1 - recency_hours / 24))
 
         base_score = (embedding_score * 0.4) + (recency_score * 0.6)
-        final_score = apply_premium_boost(base_score, candidate_tier=c.premium_tier, current_tier=current_user.premium_tier)
+        final_score = apply_premium_boost(
+            base_score,
+            candidate_tier=c.premium_tier,
+            current_tier=current_user.premium_tier,
+        )
 
         matches.append(
             MatchResponse(
@@ -404,7 +443,7 @@ async def get_age_filtered_recommendations(
                 age=c.age or 0,
                 bio=c.bio or "",
                 match_score=math.floor(final_score * 100),
-                distance_km=None,  # location ignored
+                distance_km=None,
             )
         )
 

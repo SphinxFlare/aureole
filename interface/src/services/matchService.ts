@@ -39,8 +39,8 @@ export const getFreshRecommendations = async () => {
 
 
 export const getMatches = async (): Promise<Match[]> => {
-  const response = await api.get('/session/matches');
-  return response.data;
+  const res = await api.get("/insights/enriched");
+  return res.data;
 };
 
 // Fetch messages for a particular partner

@@ -12,7 +12,7 @@ from utils.deps import get_db, get_current_user
 from utils.match_logic import compute_compatibility_score
 from schemas.match_schema import MatchFilters, MatchResponse
 from models.profile_model import Profile
-from models.user_model import User
+from models.user_model import User, UserMedia
 
 router = APIRouter(prefix="/matches", tags=["Matches"])
 
@@ -54,7 +54,7 @@ async def recommend_matches(
             User.age <= filters.max_age,
             Profile.embedding.isnot(None)
         )
-        .order_by(func.random())  # introduce randomization
+        .order_by(func.random())
     )
 
     result = await db.execute(candidates_stmt)
@@ -63,11 +63,30 @@ async def recommend_matches(
     if not candidates:
         return []
 
+    # 🔥 Bulk media lookup
+    candidate_ids = [str(r.id) for r in candidates]
+
+    media_stmt = (
+        select(UserMedia.user_id, UserMedia.file_path)
+        .where(
+            UserMedia.user_id.in_(candidate_ids),
+            UserMedia.media_type == "image"
+        )
+        .order_by(UserMedia.created_at)
+    )
+
+    media_res = await db.execute(media_stmt)
+    media_rows = media_res.all()
+
+    media_map = {}
+    for uid, file_url in media_rows:
+        uid = str(uid)
+        media_map.setdefault(uid, []).append(file_url)
+
     matches = []
 
-    # 3️⃣ Compute compatibility for each candidate
+    # 3️⃣ Build match response
     for r in candidates:
-        # Create a temporary “user-like” object to pass into scoring logic
         class TempUser:
             def __init__(self, lat, lon):
                 self.latitude = lat
@@ -83,24 +102,37 @@ async def recommend_matches(
             max_distance_km=filters.max_distance_km
         )
 
+        uid = str(r.id)
+
+        # 🔥 FIX: Normalize all photo URLs
+        normalized_photos = [
+            (
+                url
+                if url.startswith("http")
+                else f"http://127.0.0.1:8000/{url.lstrip('/')}"
+            )
+            for url in media_map.get(uid, [])
+        ]
+
         matches.append(
             MatchResponse(
-                user_id=str(r.id),
+                user_id=uid,
                 full_name=r.full_name or "",
                 age=r.age or 0,
                 bio=r.bio or "",
                 match_score=score_data["match_score"],
                 distance_km=score_data["distance_km"],
+                photos=normalized_photos
             )
         )
 
         if len(matches) >= filters.limit:
             break
 
-    # 4️⃣ Sort by compatibility score
     matches.sort(key=lambda x: x.match_score, reverse=True)
-
     return matches
+
+
 
 
 # routes/match_routes.py (add inside your existing router)
@@ -173,22 +205,21 @@ async def boosted_tier_route(
     return await get_boosted_tier_recommendations(db, current_user, limit)
 
 
-@router.get("/recommendations/age-filtered", response_model=List[MatchResponse])
+
+@router.get("/recommendations/filtered", response_model=List[MatchResponse])
 async def age_filtered_route(
     limit: int = 20,
     min_age: int = 18,
     max_age: int = 100,
+    gender: List[str] = Query(None),   # 👈 NEW
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Returns users filtered by age preference:
-    40% embedding similarity, 60% recency, optional premium boost.
-    """
     return await get_age_filtered_recommendations(
         db=db,
         current_user=current_user,
         limit=limit,
         min_age=min_age,
-        max_age=max_age
+        max_age=max_age,
+        gender=gender,
     )

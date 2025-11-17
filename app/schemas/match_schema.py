@@ -17,3 +17,4 @@ class MatchResponse(BaseModel):
     bio: str
     match_score: int  # 0-100
     distance_km: Optional[float] = None
+    photos: List[str] = []     # new

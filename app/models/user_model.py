@@ -36,6 +36,8 @@ class User(Base):
     # Verification & Safety
     is_verified = Column(Boolean, default=False)
     verified_photo_path = Column(String, nullable=True)
+    profile_photo = Column(String, nullable=True)  
+
 
     # Premium & Monetization
     premium_tier = Column(Integer, default=0) # e.g., [0: Not Applicable, 1: Premium Tier-1, 2: Premium Tier-2]
@@ -45,6 +47,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_profile_hidden = Column(Boolean, default=False)
     last_active = Column(DateTime(timezone=True), server_default=func.now())
+    token_version = Column(Integer, default=0, nullable=False)
+
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

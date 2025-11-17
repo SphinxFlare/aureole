@@ -25,46 +25,45 @@ async def upload_media(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    # Validate file type
     if file.content_type not in ["image/jpeg", "image/png", "video/mp4"]:
         raise HTTPException(status_code=400, detail="Only JPEG, PNG, or MP4 allowed")
 
-    # Determine media type
     media_type = "video" if file.content_type.startswith("video/") else "image"
 
-    # Build filename
     ext = file.filename.split('.')[-1] if '.' in file.filename else "jpg"
     filename = f"{current_user.id}_{uuid4().hex}.{ext}"
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.join(UPLOAD_DIR, filename)
+
+    # Local filesystem path
+    local_path = os.path.join(UPLOAD_DIR, filename)
 
     # Save file
-    with open(file_path, "wb") as buffer:
+    with open(local_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # ✅ Only create VerificationAttempt if it's a verification upload
+    # Public URL (this is what frontend MUST receive)
+    base_url = "http://127.0.0.1:8000"
+    public_url = f"{base_url}/{UPLOAD_DIR}/{filename}"
+
+    # If verification upload → update user verified fields
     if is_verification:
         attempt = VerificationAttempt(
             user_id=current_user.id,
-            photo_path=file_path,
+            photo_path=public_url,
             status="pending",
         )
-        db.add(attempt)  # ← ✅ add to session
+        db.add(attempt)
 
-        # ✅ Mark verified instantly (optional)
         current_user.is_verified = True
+        current_user.profile_photo = public_url   # <-- FIXED
 
-        # ✅ Set as profile photo
-        current_user.profile_photo = file_path
-
-
-    # Create media record
+    # Store media entry
     media = UserMedia(
         user_id=current_user.id,
-        file_path=file_path,
+        file_path=public_url,   # <-- FIXED
         media_type=media_type,
         is_verified=is_verification
     )
+
     db.add(media)
     await db.commit()
     await db.refresh(media)
@@ -73,5 +72,6 @@ async def upload_media(
         "msg": "Media uploaded",
         "media_id": str(media.id),
         "is_verified": is_verification,
-        "media_type": media_type
+        "media_type": media_type,
+        "url": public_url,  # optional
     }

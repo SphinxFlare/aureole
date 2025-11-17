@@ -2,6 +2,14 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from utils.config import settings
+from openai import AsyncOpenAI
+
+
+# Inference Model
+client = AsyncOpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=settings.OPENAI_API_KEY
+)
 
 # Create async engine
 engine = create_async_engine(

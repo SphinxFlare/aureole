@@ -1,6 +1,5 @@
 # router/message_router.py
 
-
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 from sqlalchemy import select
@@ -59,21 +58,24 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                         "timestamp": msg.created_at.isoformat() if msg.created_at else None,
                     }
 
-                    sent = await manager.send_personal_message(user_id, payload)
+                    # target the actual receiver (not the currently connecting user variable)
+                    target_id = str(msg.receiver_id)
+                    sent = await manager.send_personal_message(target_id, payload)
+
                     if sent:
                         msg.is_delivered = True
                         delivered_count += 1
 
-                        # Notify sender of delivery
+                        # Notify sender of delivery (send to sender's active sockets)
                         await manager.send_personal_message(str(msg.sender_id), {
                             "type": "delivery_receipt",
                             "message_id": str(msg.id),
                         })
                     else:
-                        print(f"📭 Receiver {user_id} has no active sockets for pending message.")
+                        print(f"📭 Receiver {target_id} has no active sockets for pending message.")
 
                 except Exception as e:
-                    print(f"⚠️ Could not deliver pending {msg.id} → {user_id}: {e}")
+                    print(f"⚠️ Could not deliver pending {msg.id} → {msg.receiver_id}: {e}")
 
             if delivered_count > 0:
                 await db.commit()
@@ -136,13 +138,13 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                             "timestamp": new_msg.created_at.isoformat() if new_msg.created_at else None,
                         }
 
-                        sent = await manager.send_personal_message(receiver_id, payload)
+                        sent = await manager.send_personal_message(str(receiver_id), payload)
                         if sent:
                             new_msg.is_delivered = True
                             await db.commit()
                             await db.refresh(new_msg)
 
-                            await manager.send_personal_message(user_id, {
+                            await manager.send_personal_message(str(user_id), {
                                 "type": "delivery_receipt",
                                 "message_id": str(new_msg.id),
                             })
@@ -206,12 +208,12 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                             "timestamp": new_msg.created_at.isoformat() if new_msg.created_at else None,
                         }
 
-                        sent = await manager.send_personal_message(receiver_id, payload)
+                        sent = await manager.send_personal_message(str(receiver_id), payload)
                         if sent:
                             new_msg.is_delivered = True
                             await db.commit()
                             await db.refresh(new_msg)
-                            await manager.send_personal_message(user_id, {
+                            await manager.send_personal_message(str(user_id), {
                                 "type": "delivery_receipt",
                                 "message_id": str(new_msg.id),
                             })

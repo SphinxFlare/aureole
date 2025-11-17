@@ -1,110 +1,135 @@
-// src/pages/Profile.tsx
-
+// ─────────────────────────────────────────────────────────────
+//  PROFILE PAGE — PREMIUM NEON COSMIC UI (Hero + Gallery + Aura)
+// ─────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { RootState, AppDispatch } from "@/redux/store";
+import { useAppSelector } from "@/redux/hooks";
+import { useDispatch } from "react-redux";
+import { AppDispatch } from "@/redux/store";
 import {
   fetchUser,
   uploadUserMedia,
   removeUserMedia,
   activateUserAura,
   editUser,
+  setUserAvatar,
 } from "@/redux/slices/userSlice";
+
 import CosmicBackground from "@/components/CosmicBackground";
+import AvatarGallery from "@/components/AvatarGallery";
+import PhotoViewerModal from "@/components/PhotoViewerModal";
+import UploadFloatingButton from "@/components/UploadFloatingButton";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Sparkles, Edit3, Check, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+
+import { Edit3, Check, X, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import AvatarCosmic from "@/components/AvatarCosmic";
+import { cn } from "@/lib/utils";
 
 export default function Profile() {
   const dispatch = useDispatch<AppDispatch>();
-  const { user, loading } = useSelector((state: RootState) => state.user);
+  const { user, loading } = useAppSelector((state) => state.user);
   const { toast } = useToast();
 
+  // ───────────────────────────────────────────────────
+  //  STATE
+  // ───────────────────────────────────────────────────
   const [isEditing, setIsEditing] = useState(false);
+  const [modalIndex, setModalIndex] = useState<number | null>(null);
+
   const [formData, setFormData] = useState({
     full_name: "",
     bio: "",
     interests: [] as string[],
   });
+
   const [newInterest, setNewInterest] = useState("");
 
+  // ───────────────────────────────────────────────────
+  //  LOAD USER
+  // ───────────────────────────────────────────────────
   useEffect(() => {
     dispatch(fetchUser());
   }, [dispatch]);
 
   useEffect(() => {
-    if (user) {
-      setFormData({
-        full_name: user.full_name || "",
-        bio: user.bio || "",
-        interests: user.stats?.interests || [], // optional if backend later sends interests
-      });
-    }
+    if (!user) return;
+
+    setFormData({
+      full_name: user.full_name || "",
+      bio: user.bio || "",
+      interests: user.stats?.interests || [],
+    });
   }, [user]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-  
-    console.log("uploading:", file.name);
+  // ───────────────────────────────────────────────────
+  //  MEDIA UPLOAD
+  // ───────────────────────────────────────────────────
+  const handleUpload = async (file: File) => {
     dispatch(uploadUserMedia(file))
-      .then((res) => {
-        console.log("Thunk result:", res);
-        if (res.meta.requestStatus === "fulfilled") {
-          toast({ title: "Media uploaded successfully!" });
-        } else {
-          console.error("Rejected:", res);
-          toast({ title: "Upload failed", variant: "destructive" });
-        }
-      })
-      .catch((err) => {
-        console.error("Unexpected:", err);
-        toast({ title: "Upload failed", variant: "destructive" });
-      });
+      .unwrap()
+      .then(() => toast({ title: "Photo uploaded!" }))
+      .catch(() =>
+        toast({ title: "Upload failed", variant: "destructive" })
+      );
   };
-  
 
+  // ───────────────────────────────────────────────────
+  //  AURA
+  // ───────────────────────────────────────────────────
   const handleAura = () => {
     dispatch(activateUserAura())
       .unwrap()
       .then((res) =>
         toast({
-          title: "✨ Aura Activated!",
+          title: "✨ Aura Updated!",
           description: res.ai_summary,
         })
       )
       .catch(() =>
-        toast({ title: "Failed to activate aura", variant: "destructive" })
+        toast({ title: "Aura generation failed", variant: "destructive" })
       );
   };
 
+  // ───────────────────────────────────────────────────
+  //  SAVE PROFILE
+  // ───────────────────────────────────────────────────
   const handleSave = () => {
-    dispatch(editUser({ full_name: formData.full_name, bio: formData.bio }))
+    dispatch(
+      editUser({
+        full_name: formData.full_name,
+        bio: formData.bio,
+      })
+    )
       .unwrap()
       .then(() => {
         setIsEditing(false);
         toast({ title: "Profile updated!" });
       })
       .catch(() =>
-        toast({ title: "Failed to update", variant: "destructive" })
+        toast({ title: "Update failed", variant: "destructive" })
       );
   };
 
+  // ───────────────────────────────────────────────────
+  //  INTERESTS
+  // ───────────────────────────────────────────────────
   const handleAddInterest = () => {
-    if (newInterest.trim() && !formData.interests.includes(newInterest)) {
-      setFormData((prev) => ({
-        ...prev,
-        interests: [...prev.interests, newInterest.trim()],
-      }));
-      setNewInterest("");
-    }
+    const value = newInterest.trim();
+    if (!value) return;
+    if (formData.interests.includes(value)) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      interests: [...prev.interests, value],
+    }));
+
+    setNewInterest("");
   };
 
   const handleRemoveInterest = (interest: string) => {
@@ -114,31 +139,83 @@ export default function Profile() {
     }));
   };
 
+  // ───────────────────────────────────────────────────
+  //  LOADING STATE
+  // ───────────────────────────────────────────────────
   if (loading || !user)
     return (
-      <div className="min-h-screen flex justify-center items-center">
-        <p>Loading profile...</p>
+      <div className="min-h-screen flex items-center justify-center text-white">
+        Loading profile…
       </div>
     );
 
+  // ───────────────────────────────────────────────────
+  //  USER MEDIA ORDER
+  // ───────────────────────────────────────────────────
+  const media = user.media || [];
+
+  // hero is the avatar OR last media fallback
+  const heroPhoto =
+    user.profile_photo ||
+    media[0]?.file_path ||
+    "/images/default-avatar.png";
+
+  const mediumPhotos = media
+    .filter((m) => m.file_path !== heroPhoto)
+    .map((m) => m.file_path)
+    .slice(0, 4);
+
+  const extraPhotos = media
+    .filter((m) => m.file_path !== heroPhoto)
+    .map((m) => m.file_path)
+    .slice(4);
+
+  // Mapping for modal (all photos in viewing order)
+  const modalPhotos = [
+    heroPhoto,
+    ...media.filter((m) => m.file_path !== heroPhoto).map((m) => m.file_path),
+  ];
+
+  // ───────────────────────────────────────────────────
+  //  RENDER
+  // ───────────────────────────────────────────────────
   return (
     <div className="min-h-screen relative">
       <CosmicBackground />
 
-      <div className="relative z-10 container max-w-2xl mx-auto px-4 py-6 pb-20">
-        {/* Header */}
+      {/* FULLSCREEN PHOTO MODAL */}
+      {modalIndex !== null && (
+        <PhotoViewerModal
+          photos={modalPhotos}
+          index={modalIndex}
+          onClose={() => setModalIndex(null)}
+          onSetAvatar={(file_path) => {
+            const mediaItem = user.media.find((m) => m.file_path === file_path);
+            if (mediaItem) dispatch(setUserAvatar(mediaItem.id));
+          }}
+          onDelete={(file_path) => {
+            const mediaItem = user.media.find((m) => m.file_path === file_path);
+            if (mediaItem) {
+              dispatch(removeUserMedia(mediaItem.id));
+              toast({ title: "Photo removed" });
+            }
+          }}
+        />
+      )}
+
+      <div className="relative z-10 container max-w-2xl mx-auto px-4 py-6 pb-24">
+
+        {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-cosmic">My Profile</h1>
+
           <div className="flex gap-2">
             {isEditing ? (
               <>
-                <Button
-                  size="sm"
-                  onClick={handleSave}
-                  className="bg-green-600 hover:bg-green-700"
-                >
+                <Button size="sm" onClick={handleSave} className="bg-green-600">
                   <Check className="w-4 h-4 mr-1" /> Save
                 </Button>
+
                 <Button
                   size="sm"
                   variant="destructive"
@@ -155,40 +232,14 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Profile Card */}
+        {/* ──────────────────────────────────────────────── */}
+        {/*  AVATAR + PROFILE INFO */}
+        {/* ──────────────────────────────────────────────── */}
         <Card className="glass-card mb-6">
           <CardHeader>
             <div className="flex items-start gap-4">
-              <div className="relative">
-                <Avatar className="w-24 h-24 border-4 border-primary/30 star-glow">
-                <AvatarImage
-  src={
-    user.media && user.media.length > 0
-      ? user.media[user.media.length - 1].file_path
-      : undefined
-  }
-/>
 
-                  <AvatarFallback>
-                    {user.full_name?.slice(0, 2).toUpperCase() ?? "US"}
-                  </AvatarFallback>
-                </Avatar>
-                <Button
-                  size="icon"
-                  className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full"
-                  variant="secondary"
-                  onClick={() => document.getElementById("file-input")?.click()}
-                >
-                  <Camera className="w-4 h-4" />
-                </Button>
-                <input
-                  id="file-input"
-                  type="file"
-                  accept="image/*,video/*"
-                  className="hidden"
-                  onChange={handleUpload}
-                />
-              </div>
+              <AvatarCosmic src={heroPhoto} size={120} />
 
               <div className="flex-1">
                 {isEditing ? (
@@ -197,18 +248,19 @@ export default function Profile() {
                     onChange={(e) =>
                       setFormData({ ...formData, full_name: e.target.value })
                     }
-                    className="text-lg font-medium"
-                    placeholder="Enter full name"
+                    className="text-xl font-semibold"
                   />
                 ) : (
                   <CardTitle className="text-2xl">{user.full_name}</CardTitle>
                 )}
+
                 <p className="text-muted-foreground">
                   {user.age ? `${user.age} years old` : ""}
                 </p>
               </div>
             </div>
           </CardHeader>
+
           <CardContent>
             {isEditing ? (
               <Textarea
@@ -219,28 +271,40 @@ export default function Profile() {
                 placeholder="Write something about yourself..."
               />
             ) : (
-              <p className="text-foreground/90 leading-relaxed">{user.bio}</p>
+              <p className="leading-relaxed text-foreground/90">{user.bio}</p>
             )}
           </CardContent>
         </Card>
 
-        {/* Interests */}
+        {/* ──────────────────────────────────────────────── */}
+        {/*  PHOTO GALLERY (Hero + Mediums + Drawer) */}
+        {/* ──────────────────────────────────────────────── */}
+        <AvatarGallery
+          heroPhoto={heroPhoto}
+          mediumPhotos={mediumPhotos}
+          extraPhotos={extraPhotos}
+          onOpen={(i) => setModalIndex(i)}
+        />
+
+        {/* ──────────────────────────────────────────────── */}
+        {/*  INTERESTS SECTION */}
+        {/* ──────────────────────────────────────────────── */}
         <Card className="glass-card mb-6">
           <CardHeader>
             <CardTitle>Interests</CardTitle>
           </CardHeader>
+
           <CardContent>
-            <div className="flex flex-wrap gap-2 mb-3">
-              {formData.interests.map((interest, i) => (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {formData.interests.map((interest) => (
                 <Badge
-                  key={i}
-                  variant="secondary"
-                  className="px-3 py-2 text-sm flex items-center gap-1"
+                  key={interest}
+                  className="px-3 py-2 glass-card text-sm flex items-center gap-2 neon-border"
                 >
                   {interest}
                   {isEditing && (
                     <button
-                      className="ml-1 text-xs hover:text-destructive"
+                      className="text-xs opacity-60 hover:text-red-400"
                       onClick={() => handleRemoveInterest(interest)}
                     >
                       ×
@@ -253,14 +317,15 @@ export default function Profile() {
             {isEditing && (
               <div className="flex gap-2">
                 <Input
-                  placeholder="Add interest..."
+                  placeholder="Add interest…"
                   value={newInterest}
                   onChange={(e) => setNewInterest(e.target.value)}
                 />
+
                 <Button
                   variant="secondary"
-                  onClick={handleAddInterest}
                   disabled={!newInterest.trim()}
+                  onClick={handleAddInterest}
                 >
                   Add
                 </Button>
@@ -269,51 +334,56 @@ export default function Profile() {
           </CardContent>
         </Card>
 
-        {/* AI Aura */}
+        {/* ──────────────────────────────────────────────── */}
+        {/*  AURA SECTION */}
+        {/* ──────────────────────────────────────────────── */}
         <Card className="glass-card mb-6">
           <CardHeader>
-            <CardTitle>Your Cosmic Essence</CardTitle>
+            <CardTitle>Your Aura</CardTitle>
           </CardHeader>
+
           <CardContent>
             <p className="text-sm mb-4">{user.ai_summary}</p>
-            <Button className={cn("w-full", "cosmic-glow")} onClick={handleAura}>
-              <Sparkles className="w-4 h-4 mr-2" /> Generate Aura
+
+            <Button className="w-full cosmic-glow" onClick={handleAura}>
+              <Sparkles className="w-4 h-4 mr-2" /> Refresh Aura
             </Button>
           </CardContent>
         </Card>
 
-        {/* Stats */}
+        {/* ──────────────────────────────────────────────── */}
+        {/*  STATS */}
+        {/* ──────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-4">
-          <Card className="glass-card text-center">
-            <CardContent className="pt-6">
-              <div className="text-3xl font-bold text-cosmic mb-1">
-                {user.stats?.views ?? 0}
-              </div>
-              <div className="text-sm text-muted-foreground">Views</div>
-            </CardContent>
-          </Card>
+          {["views", "matches", "response_rate"].map((key) => {
+            const label =
+              key === "views"
+                ? "Views"
+                : key === "matches"
+                ? "Matches"
+                : "Response Rate";
 
-          <Card className="glass-card text-center">
-            <CardContent className="pt-6">
-              <div className="text-3xl font-bold text-cosmic mb-1">
-                {user.stats?.matches ?? 0}
-              </div>
-              <div className="text-sm text-muted-foreground">Matches</div>
-            </CardContent>
-          </Card>
+            const value =
+              key === "response_rate"
+                ? Math.round((user.stats?.response_rate ?? 0) * 100) + "%"
+                : user.stats?.[key] ?? 0;
 
-          <Card className="glass-card text-center">
-            <CardContent className="pt-6">
-              <div className="text-3xl font-bold text-cosmic mb-1">
-                {Math.round((user.stats?.response_rate ?? 0) * 100)}%
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Response Rate
-              </div>
-            </CardContent>
-          </Card>
+            return (
+              <Card key={key} className="glass-card text-center neon-border">
+                <CardContent className="pt-6">
+                  <div className="text-3xl font-bold text-cosmic mb-1">
+                    {value}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{label}</div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
+
+      {/* FLOATING UPLOAD BUTTON */}
+      <UploadFloatingButton onUpload={handleUpload} />
     </div>
   );
 }

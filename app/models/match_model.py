@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import (
     Column, Boolean, DateTime, 
     ForeignKey, Float, Index,
-    String
+    String,Text
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
@@ -26,6 +26,10 @@ class Match(Base):
 
     # AI compatibility score
     score = Column(Float, nullable=False)  # e.g., 0.0–1.0 similarity or % match
+
+    # Matched Reasons
+    compatibility_reason = Column(Text, nullable=True)
+    conversation_starter = Column(Text, nullable=True)
 
     # Match state
     is_mutual = Column(Boolean, default=False)

@@ -26,6 +26,9 @@ export interface UserProfile {
   is_verified: boolean;
   media: Media[];
   stats?: ProfileStats;
+  profile_photo?: string | null;
+  // ADD THIS ↓↓↓
+  premium_tier?: number;
 }
 
 // -------- API CALLS --------
@@ -68,4 +71,20 @@ export const getStats = async (): Promise<ProfileStats> => {
 export const generateAura = async (): Promise<{ ai_summary: string }> => {
   const res = await api.post("/getprofile/aura");
   return res.data;
+};
+
+export const setAvatar = async (mediaId: string) => {
+  try {
+    const fd = new FormData();
+    fd.append("media_id", mediaId);
+
+    const res = await api.post("/getprofile/set-avatar", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    return res.data; // { msg, avatar }
+  } catch (err: any) {
+    console.error("❌ setAvatar failed:", err.response?.data || err.message);
+    throw err;
+  }
 };

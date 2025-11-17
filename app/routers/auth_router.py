@@ -35,6 +35,21 @@ async def login(
     access_token = create_access_token(data={"user_id": str(user.id)})
     return {"access_token": access_token, "token_type": "bearer"}
 
+
+@router.post("/logout_all")
+async def logout_all(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # increment token_version → invalidates ALL previous tokens instantly
+    current_user.token_version += 1
+
+    db.add(current_user)
+    await db.commit()
+
+    return {"msg": "all sessions invalidated"}
+
+
 @router.get("/profile/me")
 async def get_my_profile(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Profile).where(Profile.user_id == current_user.id))

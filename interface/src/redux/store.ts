@@ -14,6 +14,7 @@ import {
 } from "redux-persist";
 import storage from "redux-persist/lib/storage"; // localStorage backend
 
+
 import authReducer from "./slices/authSlice";
 import profileReducer from "./slices/profileSlice";
 import swipeReducer from "./slices/swipeSlice";
@@ -22,6 +23,8 @@ import friendReducer from "./slices/friendSlice";
 import chatReducer from "./slices/chatSlice";
 import sessionReducer from "./slices/sessionSlice";
 import userReducer  from "./slices/userSlice";
+import notificationsReducer from "@/redux/slices/notificationSlice";
+
 
 // 🔧 Removed duplicate import
 // import messageReducer from "./slices/sessionSlice";
@@ -35,12 +38,13 @@ const rootReducer = combineReducers({
   chat: chatReducer,
   session: sessionReducer,
   user: userReducer,
+  notifications: notificationsReducer,
 });
 
 const persistConfig = {
   key: "root",
   storage,
-  whitelist: ["auth", "chat", "session"], // ✅ persisted slices
+  whitelist: ["auth"], // ✅ persisted slices
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);

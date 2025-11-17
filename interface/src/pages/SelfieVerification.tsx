@@ -1,5 +1,6 @@
 // src/pages/SelfieVerification.tsx
 
+
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -10,16 +11,15 @@ import { uploadVerification } from "@/redux/slices/profileSlice";
 import { RootState, AppDispatch } from "@/redux/store";
 
 interface SelfieVerificationProps {
-  onVerified?: () => void; // <-- add optional callback prop
+  onVerified?: () => void;
 }
 
 const dataURLtoBlob = (dataurl: string) => {
   const arr = dataurl.split(",");
   const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
   const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  const u8arr = new Uint8Array(bstr.length);
+  for (let i = 0; i < bstr.length; i++) u8arr[i] = bstr.charCodeAt(i);
   return new Blob([u8arr], { type: mime });
 };
 
@@ -27,8 +27,10 @@ const SelfieVerification = ({ onVerified }: SelfieVerificationProps) => {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [captured, setCaptured] = useState(false);
   const [loadingLocal, setLoadingLocal] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
   const navigate = useNavigate();
   const { toast } = useToast();
   const dispatch = useDispatch<AppDispatch>();
@@ -49,10 +51,10 @@ const SelfieVerification = ({ onVerified }: SelfieVerificationProps) => {
       });
       setStream(mediaStream);
       if (videoRef.current) videoRef.current.srcObject = mediaStream;
-    } catch (err) {
+    } catch {
       toast({
         title: "Camera access denied",
-        description: "Allow camera to verify your identity",
+        description: "Please allow camera access",
         variant: "destructive",
       });
     }
@@ -62,10 +64,13 @@ const SelfieVerification = ({ onVerified }: SelfieVerificationProps) => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     setCaptured(true);
   };
@@ -80,19 +85,20 @@ const SelfieVerification = ({ onVerified }: SelfieVerificationProps) => {
       const dataUrl = canvasRef.current.toDataURL("image/jpeg", 0.9);
       const blob = dataURLtoBlob(dataUrl);
 
-      const result = await dispatch(uploadVerification({ file: blob, filename: "selfie.jpg" })).unwrap();
+      const result = await dispatch(
+        uploadVerification({ file: blob, filename: "selfie.jpg" })
+      ).unwrap();
 
       if (stream) stream.getTracks().forEach((t) => t.stop());
 
       toast({
         title: "Photo uploaded",
-        description: result.is_verified ? "Photo verified ✅" : "Verification submitted — result pending",
+        description: result.is_verified
+          ? "Photo verified successfully"
+          : "Verification submitted",
       });
 
-      // ✅ Call the callback if provided
-      if (onVerified) onVerified();
-
-      // Navigate to next onboarding step
+      onVerified?.();
       navigate("/onboarding", { state: { showAiConfetti: true } });
     } catch (err: any) {
       toast({
@@ -108,54 +114,148 @@ const SelfieVerification = ({ onVerified }: SelfieVerificationProps) => {
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4">
       <CosmicBackground />
-      <div className="relative z-10 w-full max-w-2xl">
-        <div className="glass-card p-8 rounded-2xl border border-white/10">
-          <div className="text-center mb-6">
-            <h1 className="text-3xl font-bold text-cosmic mb-2">Let's make sure you're really you 🌟</h1>
-            <p className="text-muted-foreground">Take a live selfie to verify your identity</p>
+
+      <div className="relative z-10 w-full max-w-2xl flex flex-col items-center">
+        <h1 className="text-3xl font-bold text-cosmic mb-4 text-center">
+          Face Verification
+        </h1>
+        <p className="text-muted-foreground mb-6 text-center max-w-sm">
+          Align your face within the hologram circle to continue
+        </p>
+
+        {/* HOLOGRAM SCANNER FRAME */}
+        <div className="relative w-[320px] h-[320px] mb-8">
+          {/* Circular Mask Container */}
+          <div className="absolute inset-0 rounded-full overflow-hidden border border-cyan-400/20 shadow-[0_0_40px_#0ae2ff55]">
+            {/* LIVE VIDEO */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-cover ${captured ? "hidden" : "block"}`}
+            />
+
+            {/* CAPTURED IMAGE */}
+            <canvas
+              ref={canvasRef}
+              className={`w-full h-full object-cover ${captured ? "block" : "hidden"}`}
+            />
           </div>
 
-          <div className="relative aspect-[4/3] rounded-xl overflow-hidden mb-6 bg-black/50">
-            <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${captured ? "hidden" : "block"}`} />
-            <canvas ref={canvasRef} className={`w-full h-full object-cover ${captured ? "block" : "hidden"}`} />
-            {!captured && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-64 h-64 border-2 border-primary/50 rounded-full"></div>
-              </div>
-            )}
-          </div>
+          {/* OUTER ORBIT RING */}
+          <div className="absolute inset-0 rounded-full border border-cyan-300/20 animate-orbit opacity-70"></div>
 
+          {/* INNER CYAN GLOW RING */}
+          <div className="absolute inset-6 rounded-full border border-cyan-300/40 animate-softpulse shadow-[0_0_25px_#0ae2ff55]"></div>
+
+          {/* SCAN GRID */}
           {!captured && (
-            <div className="text-center mb-6 space-y-2">
-              <p className="text-sm text-muted-foreground">• Center your face in the circle</p>
-              <p className="text-sm text-muted-foreground">• Make sure you're well-lit</p>
-              <p className="text-sm text-muted-foreground">• Look directly at the camera</p>
-            </div>
+            <div className="absolute inset-0 mask-grid pointer-events-none opacity-40"></div>
           )}
 
-          <div className="flex gap-3">
-            {!captured ? (
-              <>
-                <Button variant="outline" className="flex-1" onClick={() => navigate("/auth")}>Back</Button>
-                <Button className="flex-1 cosmic-glow" onClick={capturePhoto} disabled={!stream}>Capture Photo</Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" className="flex-1" onClick={retake} disabled={loadingLocal}>Retake</Button>
-                <Button className="flex-1 cosmic-glow" onClick={verify} disabled={loadingLocal}>
-                  {loadingLocal ? "Uploading..." : "Verify & Continue"}
-                </Button>
-              </>
-            )}
-          </div>
+          {/* RADIAL SCAN SWEEP */}
+          {!captured && (
+            <div className="absolute inset-0 animate-scansweep rounded-full pointer-events-none"></div>
+          )}
+
+          {/* SPARKLES */}
+          <div className="absolute inset-0 pointer-events-none animate-sparkles"></div>
+        </div>
+
+        {/* Controls */}
+        <div className="flex gap-3 w-full max-w-md">
+          {!captured ? (
+            <>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => navigate("/auth")}
+              >
+                Back
+              </Button>
+              <Button
+                className="flex-1 cosmic-glow"
+                onClick={capturePhoto}
+                disabled={!stream}
+              >
+                Capture
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={retake}
+                disabled={loadingLocal}
+              >
+                Retake
+              </Button>
+              <Button
+                className="flex-1 cosmic-glow"
+                onClick={verify}
+                disabled={loadingLocal}
+              >
+                {loadingLocal ? "Uploading…" : "Verify & Continue"}
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* INLINE ANIMATIONS */}
+      <style>{`
+        @keyframes orbit {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .animate-orbit { animation: orbit 8s linear infinite; }
+
+        @keyframes softpulse {
+          0%,100% { opacity: 0.4; }
+          50% { opacity: 0.9; }
+        }
+        .animate-softpulse { animation: softpulse 3s ease-in-out infinite; }
+
+        @keyframes scansweep {
+          0% { opacity: 0; transform: rotate(0deg); }
+          20% { opacity: 0.6; }
+          100% { opacity: 0; transform: rotate(360deg); }
+        }
+        .animate-scansweep {
+          background: conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            rgba(0, 200, 255, 0.3) 60deg,
+            transparent 120deg
+          );
+          animation: scansweep 4s linear infinite;
+        }
+
+        .mask-grid {
+          background-image: 
+            linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+          background-size: 20px 20px;
+        }
+
+        @keyframes sparkles {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
+        }
+        .animate-sparkles {
+          background-image: radial-gradient(circle at 15% 20%, #0ae2ff55 2px, transparent 2px),
+                            radial-gradient(circle at 70% 80%, #0ae2ff55 2px, transparent 2px),
+                            radial-gradient(circle at 40% 60%, #0ae2ff55 2px, transparent 2px);
+          animation: sparkles 4s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 };
 
 export default SelfieVerification;
-
 
 // import { useState, useRef, useEffect } from 'react';
 // import { useNavigate } from 'react-router-dom';

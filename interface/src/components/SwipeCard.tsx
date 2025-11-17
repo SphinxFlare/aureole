@@ -1,220 +1,14 @@
-// import { useState, useRef, useEffect } from 'react';
-// import { Heart, MapPin, Sparkles } from 'lucide-react';
-// import { cn } from '@/lib/utils';
-
-// interface Profile {
-//   id: string;
-//   name: string;
-//   age: number;
-//   bio: string;
-//   imageUrl: string;
-//   distance?: string;
-//   compatibility?: number;
-// }
-
-// interface SwipeCardProps {
-//   profile: Profile;
-//   index: number;
-//   total: number;
-//   onLike: () => void;
-//   onPass: () => void;
-// }
-
-// const SwipeCard = ({ profile, index, total, onLike, onPass }: SwipeCardProps) => {
-//   const [position, setPosition] = useState({ x: 0, y: 0 });
-//   const [isDragging, setIsDragging] = useState(false);
-//   const [isAnimating, setIsAnimating] = useState(false);
-//   const [animationType, setAnimationType] = useState<'like' | 'pass' | null>(null);
-//   const cardRef = useRef<HTMLDivElement>(null);
-//   const startPos = useRef({ x: 0, y: 0 });
-
-//   const isTopCard = index === total - 1;
-//   const zIndex = total - index;
-//   const scale = 1 - (total - index - 1) * 0.05;
-//   const translateY = (total - index - 1) * 10;
-
-//   useEffect(() => {
-//     if (animationType) {
-//       setIsAnimating(true);
-//       const timer = setTimeout(() => {
-//         if (animationType === 'like') {
-//           onLike();
-//         } else {
-//           onPass();
-//         }
-//         setIsAnimating(false);
-//         setAnimationType(null);
-//       }, 500);
-//       return () => clearTimeout(timer);
-//     }
-//   }, [animationType, onLike, onPass]);
-
-//   const handleStart = (clientX: number, clientY: number) => {
-//     if (!isTopCard || isAnimating) return;
-//     setIsDragging(true);
-//     startPos.current = { x: clientX - position.x, y: clientY - position.y };
-//   };
-
-//   const handleMove = (clientX: number, clientY: number) => {
-//     if (!isDragging || !isTopCard || isAnimating) return;
-//     const newX = clientX - startPos.current.x;
-//     const newY = clientY - startPos.current.y;
-//     setPosition({ x: newX, y: newY });
-//   };
-
-//   const handleEnd = () => {
-//     if (!isDragging || !isTopCard || isAnimating) return;
-//     setIsDragging(false);
-
-//     const threshold = 100;
-//     if (Math.abs(position.x) > threshold) {
-//       if (position.x > 0) {
-//         setAnimationType('like');
-//         setPosition({ x: 1000, y: position.y });
-//       } else {
-//         setAnimationType('pass');
-//         setPosition({ x: -1000, y: position.y });
-//       }
-//     } else {
-//       setPosition({ x: 0, y: 0 });
-//     }
-//   };
-
-//   const rotation = isTopCard ? position.x / 20 : 0;
-//   const opacity = isTopCard ? 1 : 0.8 - (total - index - 1) * 0.2;
-
-//   return (
-//     <>
-//       <div
-//         ref={cardRef}
-//         className={cn(
-//           'absolute inset-0 glass-card rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing select-none',
-//           isAnimating && animationType === 'like' && 'animate-starburst',
-//           isAnimating && animationType === 'pass' && 'animate-void'
-//         )}
-//         style={{
-//           transform: isTopCard
-//             ? `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg)`
-//             : `translateY(${translateY}px) scale(${scale})`,
-//           transition: isDragging ? 'none' : 'all 0.3s ease-out',
-//           zIndex,
-//           opacity,
-//         }}
-//         onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
-//         onMouseMove={(e) => handleMove(e.clientX, e.clientY)}
-//         onMouseUp={handleEnd}
-//         onMouseLeave={handleEnd}
-//         onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
-//         onTouchMove={(e) => handleMove(e.touches[0].clientX, e.touches[0].clientY)}
-//         onTouchEnd={handleEnd}
-//       >
-//         <div className="relative h-full">
-//           <img
-//             src={profile.imageUrl}
-//             alt={profile.name}
-//             className="w-full h-full object-cover"
-//             draggable={false}
-//           />
-          
-//           <div className="absolute inset-0 bg-gradient-to-t from-background/95 via-background/20 to-transparent" />
-
-//           {isTopCard && position.x > 50 && (
-//             <div className="absolute top-8 right-8 rotate-12 cosmic-glow">
-//               <div className="border-4 border-primary text-primary px-6 py-3 rounded-2xl font-bold text-2xl animate-pulse">
-//                 LIKE
-//               </div>
-//             </div>
-//           )}
-
-//           {isTopCard && position.x < -50 && (
-//             <div className="absolute top-8 left-8 -rotate-12">
-//               <div className="border-4 border-destructive text-destructive px-6 py-3 rounded-2xl font-bold text-2xl animate-pulse">
-//                 PASS
-//               </div>
-//             </div>
-//           )}
-
-//           <div className="absolute bottom-0 left-0 right-0 p-6">
-//             <div className="flex items-center justify-between mb-2">
-//               <h2 className="text-3xl font-bold text-foreground">
-//                 {profile.name}, {profile.age}
-//               </h2>
-//               {profile.compatibility && (
-//                 <div className="flex items-center gap-1 glass-card px-3 py-1 rounded-full">
-//                   <Heart className="w-4 h-4 fill-primary text-primary" />
-//                   <span className="text-primary font-bold">{profile.compatibility}%</span>
-//                 </div>
-//               )}
-//             </div>
-
-//             {profile.distance && (
-//               <div className="flex items-center gap-2 text-muted-foreground mb-3">
-//                 <MapPin className="w-4 h-4" />
-//                 <span>{profile.distance} away</span>
-//               </div>
-//             )}
-
-//             <p className="text-foreground/90 leading-relaxed">{profile.bio}</p>
-
-//             <div className="flex gap-2 mt-4">
-//               <span className="glass-card px-3 py-1 rounded-full text-sm flex items-center gap-1">
-//                 <Sparkles className="w-3 h-3 text-primary" />
-//                 Verified
-//               </span>
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-
-//       {isAnimating && animationType === 'like' && (
-//         <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-//           <div className="animate-starburst-particles">
-//             {[...Array(12)].map((_, i) => (
-//               <div
-//                 key={i}
-//                 className="absolute w-3 h-3 bg-primary rounded-full"
-//                 style={{
-//                   transform: `rotate(${i * 30}deg) translateY(-100px)`,
-//                   animation: `particle-burst 0.6s ease-out forwards`,
-//                   animationDelay: `${i * 0.03}s`,
-//                 }}
-//               />
-//             ))}
-//           </div>
-//         </div>
-//       )}
-
-//       {isAnimating && animationType === 'pass' && (
-//         <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-//           <div className="animate-void-collapse">
-//             <div className="w-32 h-32 rounded-full border-4 border-muted/50 animate-ping" />
-//           </div>
-//         </div>
-//       )}
-//     </>
-//   );
-// };
-
-// export default SwipeCard;
-
-
-
 // src/components/SwipeCard.tsx
-
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
-import { Heart, MapPin, Sparkles, Star } from "lucide-react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
+import { MapPin, Info, PawPrint } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Profile } from "@/types/types";
-
-// interface Profile {
-//   id: string;
-//   name: string;
-//   age: number;
-//   bio: string;
-//   imageUrl: string;
-//   distance?: string;
-//   compatibility?: number;
-// }
 
 interface SwipeCardProps {
   profile: Profile;
@@ -229,189 +23,231 @@ const SwipeCard = (
   { profile, index, total, onLike, onPass, onSuperLike }: SwipeCardProps,
   ref: any
 ) => {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [animationType, setAnimationType] = useState<"like" | "pass" | "superlike" | null>(null);
-  const startPos = useRef({ x: 0, y: 0 });
+  // CARD SWIPE STATE
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const [animating, setAnimating] = useState(false);
+  const [type, setType] = useState<"like" | "pass" | "superlike" | null>(null);
 
-  const isTopCard = index === total - 1;
+  // IMAGE CAROUSEL STATE
+  const [photoIndex, setPhotoIndex] = useState(0);
+
+  // FULL-INFO OVERLAY
+  const [isRevealed, setIsRevealed] = useState(false);
+
+  const start = useRef({ x: 0, y: 0 });
+  const isTop = index === total - 1;
   const stackIndex = total - index - 1;
-  const zIndex = 100 - stackIndex;
-  const scale = 1 - stackIndex * 0.07;
-  const translateY = stackIndex * 25;
-  const opacity = isTopCard ? 1 : 0.7 - stackIndex * 0.15;
 
-  useEffect(() => {
-    if (!animationType) return;
-    setIsAnimating(true);
-    let cancelled = false;
+  const scale = 1 - stackIndex * 0.05;
+  const translateY = stackIndex * 22;
 
-    const timer = setTimeout(() => {
-      if (cancelled) return;
+  // CAROUSEL HANDLERS
+  const nextPhoto = () => {
+    if (profile.photos.length <= 1) return;
+    setPhotoIndex((i) => (i + 1) % profile.photos.length);
+  };
 
-      if (animationType === "like") onLike?.();
-      else if (animationType === "pass") onPass?.();
-      else if (animationType === "superlike") onSuperLike?.();
+  const prevPhoto = () => {
+    if (profile.photos.length <= 1) return;
+    setPhotoIndex((i) => (i === 0 ? profile.photos.length - 1 : i - 1));
+  };
 
-      setIsAnimating(false);
-      setAnimationType(null);
-      setPosition({ x: 0, y: 0 });
-    }, 400);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [animationType, onLike, onPass, onSuperLike]);
-
+  // BUTTON TRIGGER SWIPE
   useImperativeHandle(ref, () => ({
-    triggerAnimation: (type: "like" | "pass" | "superlike") => {
-      if (!isTopCard || isAnimating) return;
-      setAnimationType(type);
+    triggerAnimation: (t: "like" | "pass" | "superlike") => {
+      if (!isTop || animating) return;
+      setType(t);
 
-      if (type === "like") setPosition({ x: 800, y: 0 });
-      else if (type === "pass") setPosition({ x: -800, y: 0 });
-      else if (type === "superlike") setPosition({ x: 0, y: -800 });
+      const drift = 1200;
+      if (t === "like") setPos({ x: drift, y: 0 });
+      if (t === "pass") setPos({ x: -drift, y: 0 });
+      if (t === "superlike") setPos({ x: 0, y: -drift });
     },
   }));
 
-  const handleStart = (x: number, y: number) => {
-    if (!isTopCard || isAnimating) return;
-    setIsDragging(true);
-    startPos.current = { x: x - position.x, y: y - position.y };
+  // SWIPE COMPLETE
+  useEffect(() => {
+    if (!type) return;
+    setAnimating(true);
+
+    const timer = setTimeout(() => {
+      if (type === "like") onLike();
+      if (type === "pass") onPass();
+      if (type === "superlike") onSuperLike?.();
+
+      setAnimating(false);
+      setType(null);
+      setPos({ x: 0, y: 0 });
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [type]);
+
+  // DRAG HANDLERS
+  const startDrag = (x: number, y: number) => {
+    if (!isTop || animating) return;
+    start.current = { x: x - pos.x, y: y - pos.y };
+    setDragging(true);
   };
 
-  const handleMove = (x: number, y: number) => {
-    if (!isDragging || !isTopCard || isAnimating) return;
-    const newX = x - startPos.current.x;
-    const newY = y - startPos.current.y;
-    setPosition({ x: newX, y: newY });
+  const moveDrag = (x: number, y: number) => {
+    if (!dragging || !isTop || animating) return;
+    setPos({ x: x - start.current.x, y: y - start.current.y });
   };
 
-  const handleEnd = () => {
-    if (!isDragging || !isTopCard || isAnimating) return;
-    setIsDragging(false);
-    const threshold = 100;
-    if (Math.abs(position.x) > threshold) {
-      setAnimationType(position.x > 0 ? "like" : "pass");
-      setPosition({ x: position.x > 0 ? 800 : -800, y: position.y });
+  const endDrag = () => {
+    if (!dragging || animating || !isTop) return;
+    setDragging(false);
+
+    const threshold = 130;
+    if (Math.abs(pos.x) > threshold) {
+      if (pos.x > 0) setType("like");
+      else setType("pass");
+
+      const glide = pos.x > 0 ? 1200 : -1200;
+      setPos({ x: glide, y: pos.y });
     } else {
-      setPosition({ x: 0, y: 0 });
+      setPos({ x: 0, y: 0 });
     }
   };
 
-  const rotation = isTopCard ? position.x / 20 : 0;
-  const likeOpacity = Math.min(Math.max(position.x / 100, 0), 1);
-  const passOpacity = Math.min(Math.max(-position.x / 100, 0), 1);
+  // VISUAL EFFECTS
+  const rotation = pos.x / 16;
+  const parallaxX = pos.x * 0.012;
+  const parallaxY = pos.y * 0.012;
 
-  // Apply animation transforms
+  const likeOpacity = Math.min(Math.max(pos.x / 120, 0), 1);
+  const passOpacity = Math.min(Math.max(-pos.x / 120, 0), 1);
+
   const transform =
-    animationType === "like"
-      ? "translateX(120%) rotate(15deg)"
-      : animationType === "pass"
-      ? "translateX(-120%) rotate(-15deg)"
-      : animationType === "superlike"
-      ? "translateY(-120%) scale(1.1)"
-      : `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg)`;
-
-  const superLikeGlow =
-    animationType === "superlike"
-      ? "shadow-[0_0_40px_10px_rgba(56,189,248,0.8)]"
-      : "";
+    type === "like"
+      ? "translateX(120%) rotate(14deg)"
+      : type === "pass"
+      ? "translateX(-120%) rotate(-14deg)"
+      : type === "superlike"
+      ? "translateY(-120%) scale(1.06)"
+      : `translate(${pos.x}px, ${pos.y}px) rotate(${rotation}deg)`;
 
   return (
     <div
       className={cn(
-        "absolute inset-0 rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-xl",
-        "transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]",
-        isAnimating && "pointer-events-none",
-        superLikeGlow
+        "absolute inset-0 rounded-3xl overflow-hidden soft-depth-card",
+        "cursor-grab active:cursor-grabbing select-none transition-all duration-500"
       )}
       style={{
-        transform,
-        zIndex,
-        opacity,
+        transform: `${transform} scale(${scale}) translateY(${translateY}px)`,
+        zIndex: 200 - stackIndex,
       }}
-      onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
-      onMouseMove={(e) => handleMove(e.clientX, e.clientY)}
-      onMouseUp={handleEnd}
-      onMouseLeave={handleEnd}
-      onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
-      onTouchMove={(e) => handleMove(e.touches[0].clientX, e.touches[0].clientY)}
-      onTouchEnd={handleEnd}
+      onMouseDown={(e) => startDrag(e.clientX, e.clientY)}
+      onMouseMove={(e) => moveDrag(e.clientX, e.clientY)}
+      onMouseUp={endDrag}
+      onMouseLeave={endDrag}
+      onTouchStart={(e) => startDrag(e.touches[0].clientX, e.touches[0].clientY)}
+      onTouchMove={(e) => moveDrag(e.touches[0].clientX, e.touches[0].clientY)}
+      onTouchEnd={endDrag}
+      onClick={() => setIsRevealed(true)}
     >
+      {/* ==== IMAGE CAROUSEL ==== */}
       <img
-        src={profile.imageUrl}
+        key={photoIndex} // forces fade animation
+        src={profile.photos[photoIndex] || "/fallback.jpg"}
         alt={profile.name}
-        className="w-full h-full object-cover object-center"
         draggable={false}
+        className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300 fade-image"
+        style={{
+          transform: `translate(${parallaxX}px, ${parallaxY}px) scale(1.08)`,
+          transition: dragging ? "none" : "transform 0.45s ease, opacity 0.35s ease",
+        }}
       />
 
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
-
-      {/* LIKE / PASS Overlays */}
-      <div
-        className="absolute top-8 right-8 rotate-12 text-4xl font-bold text-primary"
-        style={{ opacity: likeOpacity }}
-      >
-        LIKE
+      {/* ==== TAP ZONES FOR CAROUSEL ==== */}
+      <div className="absolute inset-0 z-30 flex">
+        <div
+          className="w-1/2 h-full"
+          onClick={(e) => {
+            e.stopPropagation();
+            prevPhoto();
+          }}
+        />
+        <div
+          className="w-1/2 h-full"
+          onClick={(e) => {
+            e.stopPropagation();
+            nextPhoto();
+          }}
+        />
       </div>
-      <div
-        className="absolute top-8 left-8 -rotate-12 text-4xl font-bold text-destructive"
-        style={{ opacity: passOpacity }}
-      >
-        PASS
+
+      {/* ==== PHOTO INDICATORS ==== */}
+      <div className="absolute top-4 left-0 right-0 flex justify-center gap-1 z-40">
+        {profile.photos.map((_, i) => (
+          <div
+            key={i}
+            className={`h-1.5 w-1.5 rounded-full transition-all ${
+              i === photoIndex ? "bg-white" : "bg-white/40"
+            }`}
+          />
+        ))}
       </div>
 
-      {/* SUPERLIKE Overlay */}
-      {animationType === "superlike" && (
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 text-sky-400 text-5xl font-extrabold drop-shadow-lg animate-pulse">
-          SUPER LIKE ⭐
-        </div>
-      )}
+      {/* ==== SPARKLES ==== */}
+      <div className="sparkle-layer pointer-events-none"></div>
 
-      {/* Bottom content */}
-      <div className="absolute bottom-0 left-0 right-0 p-6">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-3xl font-bold text-white drop-shadow-md">
-            {profile.name}, {profile.age}
+      {/* ==== OVERLAY BEFORE "REVEAL" ==== */}
+      {!isRevealed && <div className="full-glass-cover"></div>}
+
+      {/* ==== INFO BUTTON ==== */}
+      <button
+        className="reveal-button z-40"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsRevealed(true);
+        }}
+      >
+        <Info className="w-4 h-4 text-black" />
+      </button>
+
+      {/* ==== BOTTOM DETAILS ==== */}
+      <div className="absolute bottom-0 left-0 w-full p-6 z-40">
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-3xl font-semibold text-white drop-shadow-sm">
+            {profile.name},{" "}
+            <span className="text-gray-200 font-light">{profile.age}</span>
           </h2>
-          {profile.compatibility && (
-            <div className="flex items-center gap-1 bg-black/30 px-3 py-1 rounded-full text-white text-sm">
-              <Heart className="w-4 h-4 fill-primary text-primary" />
-              {profile.compatibility}%
-            </div>
-          )}
+
+          <PawPrint className="w-3.5 h-3.5 text-grey-300" strokeWidth={3.5} />
         </div>
 
         {profile.distance && (
-          <div className="flex items-center gap-2 text-gray-300 text-sm mb-2">
-            <MapPin className="w-4 h-4" />
-            <span>{profile.distance} away</span>
-          </div>
+          <p className="flex items-center gap-1.5 text-sm text-gray-200/90">
+            <MapPin className="w-4 h-4 text-cyan-300" />
+            {profile.distance}
+          </p>
         )}
 
-        <p className="text-gray-200 text-sm leading-relaxed line-clamp-3">{profile.bio}</p>
+        <p className="text-md text-gray-200 mt-3 line-clamp-3">
+          {profile.bio}
+        </p>
+      </div>
 
-        <div className="flex gap-2 mt-4">
-          <span className="bg-white/10 backdrop-blur-sm px-3 py-1 rounded-full text-xs flex items-center gap-1 text-white">
-            <Sparkles className="w-3 h-3 text-primary" />
-            Verified
-          </span>
+      {/* ==== LIKE / PASS OVERLAYS ==== */}
+      <div className="absolute inset-0 flex justify-between px-8 pt-8 pointer-events-none z-40">
+        <div
+          className="text-6xl font-black text-red-400 opacity-0 drop-shadow-lg"
+          style={{ opacity: passOpacity }}
+        >
+          ✖
+        </div>
+        <div
+          className="text-6xl font-black text-emerald-400 opacity-0 drop-shadow-lg"
+          style={{ opacity: likeOpacity }}
+        >
+          ❤
         </div>
       </div>
     </div>
   );
 };
 
-export default forwardRef<
-  { triggerAnimation: (type: "like" | "pass" | "superlike") => void },
-  SwipeCardProps
->(SwipeCard);
-
-
-
-
-// export default SwipeCard;
+export default forwardRef(SwipeCard);

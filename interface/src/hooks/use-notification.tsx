@@ -1,102 +1,76 @@
 // src/hooks/use-notification.tsx
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { useSelector } from "react-redux";
+
+// src/hooks/use-notification.tsx
+import { createContext, useContext, ReactNode, useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import type { RootState } from "@/redux/store";
 import { toast } from "sonner";
 import { Heart, MessageCircle, Eye } from "lucide-react";
 import { PersistentNotificationService } from "@/services/notificationService";
-
-export type NotificationType = "match" | "message" | "view";
-
-export interface Notification {
-  id: string;
-  type: NotificationType;
-  message: string;
-  timestamp: Date;
-  read: boolean;
-}
+import { notificationReceived } from "@/redux/slices/notificationSlice";
 
 interface NotificationContextType {
-  notifications: Notification[];
-  unreadCounts: {
-    matches: number;
-    messages: number;
-    views: number;
-  };
-  clearAll: () => void;
-  markAsRead: (id: string) => void;
+  sendTest?: (type: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
-  const userId = useSelector((state: RootState) => state.auth.user?.id);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [initialized, setInitialized] = useState(false);
+  const userId = useSelector((s: RootState) => s.auth.user?.id);
+  const dispatch = useDispatch();
 
-  const addNotification = (type: NotificationType, message: string) => {
-    const icon = type === "match" ? Heart : type === "message" ? MessageCircle : Eye;
-    const IconComponent = icon;
+  const makeId = () =>
+    crypto.randomUUID?.() || `nid-${Date.now()}`;
 
-    setNotifications((prev) => [
-      {
-        id: Date.now().toString(),
-        type,
-        message,
-        timestamp: new Date(),
-        read: false,
-      },
-      ...prev,
-    ]);
+  const showToast = (type: string, message: string) => {
+    const Icon =
+      type === "match" ? Heart :
+      type === "message" ? MessageCircle :
+      Eye;
 
     toast(message, {
-      icon: <IconComponent className="w-5 h-5 text-primary animate-pulse" />,
-      duration: 4000,
+      icon: <Icon className="w-5 h-5 text-primary" />,
+      duration: 3000,
     });
   };
 
   useEffect(() => {
-    if (!userId || initialized) return;
-    setInitialized(true);
+    if (!userId) return;
 
-    console.log("🔔 Initializing NotificationProvider for user:", userId);
-    const notifService = PersistentNotificationService.getInstance(userId);
-    notifService.connect();
+    const service = PersistentNotificationService.getInstance(userId);
+    service.connect();
 
-    notifService.onNotification((event) => {
-      if (event.event === "notification" && event.data) {
-        const type =
-          event.data.type === "match"
-            ? "match"
-            : event.data.type === "view"
-            ? "view"
-            : "message";
+    service.onNotification((event) => {
+      if (event.event !== "notification" || !event.data) return;
 
-        const message =
-          event.data.meta?.note ||
-          `${event.data.actor_name || "Someone"} sent you a ${type}`;
+      const backend = event.data.type?.toLowerCase();
 
-        addNotification(type, message);
-      }
+      const mapped =
+        backend === "match" ? "match" :
+        backend === "message" ? "message" :
+        backend === "like" ? "like" :
+        backend === "system" ? "system" :
+        "visit";
+
+      const payload = {
+        id: makeId(),
+        type: mapped as any,
+        title: event.data.title || mapped.toUpperCase(),
+        message: event.data.meta?.note || event.data.message || "You have a notification",
+        timestamp: new Date().toISOString(),
+        read: false,
+        meta: event.data.meta || {},
+      };
+
+      dispatch(notificationReceived(payload));
+      showToast(mapped, payload.message);
     });
 
-    // we do NOT disconnect here unless user logs out
-  }, [userId, initialized]);
-
-  const markAsRead = (id: string) =>
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-
-  const clearAll = () => setNotifications([]);
-
-  const unreadCounts = {
-    matches: notifications.filter((n) => n.type === "match" && !n.read).length,
-    messages: notifications.filter((n) => n.type === "message" && !n.read).length,
-    views: notifications.filter((n) => n.type === "view" && !n.read).length,
-  };
+  }, [userId]);
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCounts, markAsRead, clearAll }}>
+    <NotificationContext.Provider value={{}}>
       {children}
     </NotificationContext.Provider>
   );
@@ -104,6 +78,6 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 
 export const useNotifications = () => {
   const ctx = useContext(NotificationContext);
-  if (!ctx) throw new Error("useNotifications must be used within NotificationProvider");
+  if (!ctx) throw new Error("useNotifications must be used inside NotificationProvider");
   return ctx;
 };

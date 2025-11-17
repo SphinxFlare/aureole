@@ -283,6 +283,9 @@
 
 
 // src/pages/Discovery.tsx
+
+
+// src/pages/Discovery.tsx
 import { useState, useEffect, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDispatch } from "react-redux";
@@ -290,7 +293,7 @@ import { AppDispatch } from "@/redux/store";
 import { sendSwipe, sendSuperLike } from "@/redux/slices/swipeSlice";
 import CosmicBackground from "@/components/CosmicBackground";
 import SwipeCard from "@/components/SwipeCard";
-import { Heart, X, Sparkles, Star, SlidersHorizontal } from "lucide-react";
+import { Heart, X, Star, SlidersHorizontal } from "lucide-react";
 import { Profile } from "@/types/types";
 import {
   getRecommendations,
@@ -299,237 +302,207 @@ import {
   getFreshRecommendations,
   getAgeFilteredMatches,
 } from "@/services/matchService";
-import { Slider } from "@/components/ui/slider"; // assuming shadcn-style slider
+import { Slider } from "@/components/ui/slider";
 
 const Discovery = () => {
-  const [activeTab, setActiveTab] = useState("nearby");
+  const [activeTab, setActiveTab] = useState<string>(""); // NOTHING SELECTED
   const [profiles, setProfiles] = useState<Record<string, Profile[]>>({
     nearby: [],
     soulmates: [],
     fresh: [],
     age: [],
   });
-  const [ageRange, setAgeRange] = useState<[number, number]>([20, 35]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const cardRefs = useRef<Record<string, any>>({});
-  const dispatch = useDispatch<AppDispatch>();
-
-  // Fetch base recommendations on mount
   useEffect(() => {
-    const fetchInitial = async () => {
+    const loadInitial = async () => {
       try {
         setLoading(true);
-        const base = await getRecommendations();
-        setProfiles((prev) => ({ ...prev, nearby: mapProfiles(base) }));
-      } catch (err: any) {
-        console.error("Failed to load base profiles:", err);
-        setError(err.response?.data?.detail || "Failed to load profiles");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchInitial();
-  }, []);
-
-  // Fetch data on tab change (lazy loading)
-  useEffect(() => {
-    const loadTabData = async () => {
-      if (profiles[activeTab].length > 0) return; // already loaded
-
-      try {
-        setLoading(true);
-        let data = [];
-        if (activeTab === "soulmates") data = await getCompatibilityMatches();
-        else if (activeTab === "fresh") data = await getFreshRecommendations();
-        else if (activeTab === "nearby") data = await getProximityMatches();
-        else if (activeTab === "age") {
-          const [min, max] = ageRange;
-          data = await getAgeFilteredMatches(min, max);
-        }
-
-        setProfiles((prev) => ({
+        const base = await getRecommendations();  
+        setProfiles(prev => ({
           ...prev,
-          [activeTab]: mapProfiles(data),
+          nearby: mapProfiles(base)
         }));
-      } catch (err: any) {
+      } catch (err) {
         setError("Failed to load profiles");
       } finally {
         setLoading(false);
       }
     };
-    loadTabData();
-  }, [activeTab]);
+  
+    loadInitial();
+  }, []);
+  
+
+  const [ageRange, setAgeRange] = useState<[number, number]>([20, 35]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const cardRefs = useRef<Record<string, any>>({});
+  const dispatch = useDispatch<AppDispatch>();
+
+  // Load NOTHING on mount.
+  // Not even nearby.
+
+  const handleTabChange = async (tab: string) => {
+    setActiveTab(tab);
+
+    // If already loaded → skip
+    if (profiles[tab].length > 0) return;
+
+    setLoading(true);
+
+    try {
+      let data = [];
+      if (tab === "nearby") data = await getProximityMatches();
+      if (tab === "soulmates") data = await getCompatibilityMatches();
+      if (tab === "fresh") data = await getFreshRecommendations();
+      if (tab === "age") {
+        const [min, max] = ageRange;
+        data = await getAgeFilteredMatches(min, max);
+      }
+
+      setProfiles(prev => ({
+        ...prev,
+        [tab]: mapProfiles(data),
+      }));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const mapProfiles = (data: any[]): Profile[] =>
-    data.map((p) => ({
+    data.map(p => ({
       id: p.user_id,
       name: p.full_name,
       age: p.age,
       bio: p.bio,
       compatibility: p.match_score,
       distance: p.distance_km ? `${p.distance_km.toFixed(1)} km` : undefined,
-      imageUrl:
-        "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400",
+      photos: p.photos || [],   // ← correct
     }));
+  
+  console.log("Loaded profiles:", profiles);
 
-  const handleLike = (tabKey: string, profileId: string) => {
-    dispatch(sendSwipe({ targetId: profileId, liked: true }));
-    setProfiles((prev) => ({
-      ...prev,
-      [tabKey]: prev[tabKey].filter((p) => p.id !== profileId),
-    }));
+    
+
+
+  const handleLike = (tab: string, id: string) => {
+    dispatch(sendSwipe({ targetId: id, liked: true }));
+    setProfiles(p => ({ ...p, [tab]: p[tab].filter(x => x.id !== id) }));
   };
 
-  const handlePass = (tabKey: string, profileId: string) => {
-    dispatch(sendSwipe({ targetId: profileId, liked: false }));
-    setProfiles((prev) => ({
-      ...prev,
-      [tabKey]: prev[tabKey].filter((p) => p.id !== profileId),
-    }));
+  const handlePass = (tab: string, id: string) => {
+    dispatch(sendSwipe({ targetId: id, liked: false }));
+    setProfiles(p => ({ ...p, [tab]: p[tab].filter(x => x.id !== id) }));
   };
 
-  const handleSuperLike = (tabKey: string, profileId: string) => {
-    dispatch(sendSuperLike(profileId));
-    setProfiles((prev) => ({
-      ...prev,
-      [tabKey]: prev[tabKey].filter((p) => p.id !== profileId),
-    }));
+  const handleSuperLike = (tab: string, id: string) => {
+    dispatch(sendSuperLike(id));
+    setProfiles(p => ({ ...p, [tab]: p[tab].filter(x => x.id !== id) }));
   };
 
   return (
     <div className="min-h-screen relative">
       <CosmicBackground />
+
       <div className="relative z-10 container mx-auto px-4 pt-4 pb-20 max-w-lg">
-        {loading && (
-          <p className="text-center text-muted-foreground">Loading profiles...</p>
-        )}
-        {error && <p className="text-center text-destructive">{error}</p>}
 
-        {!loading && !error && (
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full mt-2"
-          >
-            <TabsList className="glass-card w-full grid grid-cols-4 mb-4">
-              <TabsTrigger value="nearby">Nearby</TabsTrigger>
-              <TabsTrigger value="soulmates">
-                <Heart className="w-4 h-4 mr-1 inline" /> Soulmates
-              </TabsTrigger>
-              <TabsTrigger value="fresh">Fresh</TabsTrigger>
-              <TabsTrigger value="age">
-                <SlidersHorizontal className="w-4 h-4 mr-1 inline" /> Age
-              </TabsTrigger>
-            </TabsList>
+        {/* TABS — now correctly connected to handleTabChange */}
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+          <TabsList className="glass-card w-full grid grid-cols-4 mb-4">
+            <TabsTrigger value="nearby">Nearby</TabsTrigger>
+            <TabsTrigger value="soulmates">
+              <Heart className="w-4 h-4 mr-1" /> Soulmates
+            </TabsTrigger>
+            <TabsTrigger value="fresh">Fresh</TabsTrigger>
+            <TabsTrigger value="age">
+              <SlidersHorizontal className="w-4 h-4 mr-1" /> Age
+            </TabsTrigger>
+          </TabsList>
 
-            {(["nearby", "soulmates", "fresh", "age"] as const).map((tabKey) => (
-              <TabsContent key={tabKey} value={tabKey}>
-                {/* AGE FILTER UI */}
-                {tabKey === "age" && (
-                  <div className="glass-card mb-4 p-4 rounded-2xl text-center">
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Select age range
-                    </p>
-                    <Slider
-                      min={18}
-                      max={60}
-                      step={1}
-                      value={ageRange}
-                      onValueChange={(v) => setAgeRange(v as [number, number])}
-                      className="w-full accent-primary"
-                    />
-                    <p className="text-primary mt-2 font-semibold">
-                      {ageRange[0]} - {ageRange[1]} yrs
-                    </p>
-                    <button
-                      onClick={async () => {
-                        setLoading(true);
-                        const data = await getAgeFilteredMatches(
-                          ageRange[0],
-                          ageRange[1]
-                        );
-                        setProfiles((prev) => ({
-                          ...prev,
-                          age: mapProfiles(data),
-                        }));
-                        setLoading(false);
-                      }}
-                      className="mt-3 px-4 py-2 rounded-full bg-primary/80 hover:bg-primary text-white text-sm"
-                    >
-                      Refresh Matches
-                    </button>
+          {(["nearby", "soulmates", "fresh", "age"] as const).map(tab => (
+            <TabsContent key={tab} value={tab}>
+
+              {/* AGE FILTER UI */}
+              {tab === "age" && (
+                <div className="glass-card mb-4 p-4 rounded-2xl text-center">
+                  <p className="text-sm text-muted-foreground mb-2">Select age range</p>
+                  <Slider
+                    min={18}
+                    max={60}
+                    step={1}
+                    value={ageRange}
+                    onValueChange={(v) => setAgeRange(v as [number, number])}
+                  />
+                  <p className="text-primary mt-2 font-semibold">
+                    {ageRange[0]} - {ageRange[1]} yrs
+                  </p>
+                </div>
+              )}
+
+              {/* CARD STACK */}
+              <div className="relative h-[580px] mt-10">
+                {profiles[tab].length === 0 ? (
+                  <div className="glass-card rounded-3xl p-10 text-center">
+                    No more profiles
+                  </div>
+                ) : (
+                  <div className="relative w-full h-full">
+                    {profiles[tab].map((p, i) => (
+                      <SwipeCard
+                        key={p.id}
+                        ref={el => (cardRefs.current[p.id] = { current: el })}
+                        profile={p}
+                        index={i}
+                        total={profiles[tab].length}
+                        onLike={() => handleLike(tab, p.id)}
+                        onPass={() => handlePass(tab, p.id)}
+                        onSuperLike={() => handleSuperLike(tab, p.id)}
+                      />
+                    ))}
                   </div>
                 )}
+              </div>
 
-                <div className="relative h-[580px] mt-10">
-                  {profiles[tabKey].length === 0 ? (
-                    <div className="glass-card rounded-3xl p-15 text-center">
-                      <p className="text-muted-foreground">No more profiles</p>
-                    </div>
-                  ) : (
-                    <div className="relative w-full h-full">
-                      {profiles[tabKey].map((profile, index) => {
-                        if (!cardRefs.current[profile.id]) {
-                          cardRefs.current[profile.id] = { current: null };
-                        }
-                        return (
-                          <SwipeCard
-                            key={profile.id}
-                            ref={(el) =>
-                              (cardRefs.current[profile.id].current = el)
-                            }
-                            profile={profile}
-                            index={index}
-                            total={profiles[tabKey].length}
-                            onLike={() => handleLike(tabKey, profile.id)}
-                            onPass={() => handlePass(tabKey, profile.id)}
-                            onSuperLike={() => handleSuperLike(tabKey, profile.id)}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+              {/* CONTROLS */}
+              <div className="flex justify-center gap-6 mt-6">
+                <button
+                  onClick={() => {
+                    const top = profiles[tab].at(-1);
+                    top?.id &&
+                      cardRefs.current[top.id]?.current?.triggerAnimation("pass");
+                  }}
+                  className="glass-card w-14 h-14 flex items-center justify-center rounded-full"
+                >
+                  <X className="w-7 h-7 text-red-400" />
+                </button>
 
-                {/* Control buttons */}
-                <div className="flex justify-center gap-6 mt-6">
-                  <button
-                    onClick={() => {
-                      const top = profiles[tabKey][profiles[tabKey].length - 1];
-                      if (top)
-                        cardRefs.current[top.id]?.current?.triggerAnimation("pass");
-                    }}
-                    className="glass-card w-14 h-14 rounded-full flex items-center justify-center hover:scale-110 transition-transform"
-                  >
-                    <X className="w-7 h-7 text-destructive" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      const top = profiles[tabKey][profiles[tabKey].length - 1];
-                      if (top)
-                        cardRefs.current[top.id]?.current?.triggerAnimation("superlike");
-                    }}
-                    className="glass-card w-14 h-14 rounded-full flex items-center justify-center bg-gradient-to-t from-indigo-500 via-sky-400 to-pink-400 shadow-lg"
-                  >
-                    <Star className="w-7 h-7 text-white" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      const top = profiles[tabKey][profiles[tabKey].length - 1];
-                      if (top)
-                        cardRefs.current[top.id]?.current?.triggerAnimation("like");
-                    }}
-                    className="glass-card w-16 h-16 rounded-full flex items-center justify-center hover:scale-110 transition-transform cosmic-glow"
-                  >
-                    <Heart className="w-8 h-8 text-primary" />
-                  </button>
-                </div>
-              </TabsContent>
-            ))}
-          </Tabs>
-        )}
+                <button
+                  onClick={() => {
+                    const top = profiles[tab].at(-1);
+                    top?.id &&
+                      cardRefs.current[top.id]?.current?.triggerAnimation("superlike");
+                  }}
+                  className="glass-card w-14 h-14 flex items-center justify-center rounded-full bg-gradient-to-t from-indigo-500 via-sky-400 to-pink-400"
+                >
+                  <Star className="w-7 h-7 text-white" />
+                </button>
+
+                <button
+                  onClick={() => {
+                    const top = profiles[tab].at(-1);
+                    top?.id &&
+                      cardRefs.current[top.id]?.current?.triggerAnimation("like");
+                  }}
+                  className="glass-card w-16 h-16 flex items-center justify-center rounded-full cosmic-glow"
+                >
+                  <Heart className="w-8 h-8 text-primary" />
+                </button>
+              </div>
+
+            </TabsContent>
+          ))}
+        </Tabs>
       </div>
     </div>
   );
