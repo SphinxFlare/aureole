@@ -150,6 +150,7 @@ class CallService:
         call.state = CallState.ACTIVE
         await self._save_call(call)
 
+        # Update states
         await call_signal_manager.set_user_state(
             call.caller_id, UserCallState.IN_CALL, call.id
         )
@@ -157,9 +158,9 @@ class CallService:
             call.callee_id, UserCallState.IN_CALL, call.id
         )
 
-        # Notify both
-        await call_signal_manager.send_to_users(
-            [call.caller_id, call.callee_id],
+        # Notify only the caller → they must start WebRTC offer
+        await call_signal_manager.send_to_user(
+            call.caller_id,
             {
                 "type": "call.accepted",
                 "call_id": call.id,
@@ -167,11 +168,23 @@ class CallService:
             },
         )
 
+        # Notify callee only with ACK → NO NEGOTIATION TRIGGER
+        await call_signal_manager.send_to_user(
+            call.callee_id,
+            {
+                "type": "call.answer_ack",
+                "call_id": call.id,
+                "status": "active",
+            },
+        )
+
+        # Return ONLY to the callee
         return {
             "type": "call.answer_ack",
             "call_id": call.id,
             "status": "active",
         }
+
 
     async def reject(self, user_id: str, msg: CallRejectMessage) -> dict:
         call = await self._get_call(msg.call_id)

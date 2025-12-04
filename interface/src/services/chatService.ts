@@ -43,7 +43,22 @@ export type EventMessage =
       type: "message_reaction_removed";
       message_id: string;
       user_id: string;
-    };
+    }
+
+  // 🔥 moderation event from backend
+  | {
+    type: "message_moderated";
+    message_id: string;
+    placeholder: string;
+    sender_id: string;
+    receiver_id: string;
+    message_type?: string;
+  }
+  
+  // 🔥 ADD THESE — EXACTLY LIKE THIS
+  | { type: "typing"; from: string }
+  | { type: "stop_typing"; from: string };
+
 
 export class PersistentChatService {
   private ws: WebSocket | null = null;
@@ -221,5 +236,13 @@ export class PersistentChatService {
 
   isConnected() {
     return !!this.ws && this.ws.readyState === WebSocket.OPEN;
+  }
+
+  sendTyping(receiverId: string) {
+    this.safeSend({ type: "typing", receiver_id: receiverId });
+  }
+  
+  stopTyping(receiverId: string) {
+    this.safeSend({ type: "stop_typing", receiver_id: receiverId });
   }
 }

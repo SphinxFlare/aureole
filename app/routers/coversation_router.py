@@ -47,12 +47,13 @@ async def get_conversation(
                 (Message.receiver_id == current_user.id),
             )
         )
-        .order_by(Message.created_at.asc())
+        .order_by(Message.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
 
     rows = (await db.execute(q)).all()
+    rows = list(reversed(rows))
     messages = [m for m, _ in rows]
     message_ids = [m.id for m in messages]
 
@@ -86,7 +87,7 @@ async def get_conversation(
             "id": str(msg.id),
             "sender_id": str(msg.sender_id),
             "receiver_id": str(msg.receiver_id),
-            "content": msg.content or "",
+            "content": "" if msg.content is None else msg.content,
             "message_type": msg.message_type,
             "media_id": str(msg.media_id) if msg.media_id else None,
             "is_read": msg.is_read,

@@ -6,11 +6,11 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Install dependencies
-COPY app/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the backend source
-COPY app/ .
+COPY . .
 
 # Expose FastAPI port
 EXPOSE 8000

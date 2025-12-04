@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactionBurst from "./ReactionBurst";
 import AudioBubble from "./AudioBubble";
+import React from "react";
+
 
 
 interface Props {
@@ -270,4 +272,4 @@ const ChatMessageBubble = ({
   );
 };
 
-export default ChatMessageBubble;
+export default React.memo(ChatMessageBubble);

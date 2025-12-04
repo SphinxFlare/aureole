@@ -169,3 +169,24 @@
     backdrop-filter: blur(12px) saturate(150%);
     border-top: 1px solid rgba(255,255,255,0.08);
   }  
+
+/* "Typng" Effect */
+  .typing-dot {
+    width: 6px;
+    height: 6px;
+    background: white;
+    border-radius: 50%;
+    opacity: 0.4;
+    animation: typingBlink 1.4s infinite;
+  }
+  
+  .dot1 { animation-delay: 0s; }
+  .dot2 { animation-delay: 0.2s; }
+  .dot3 { animation-delay: 0.4s; }
+  
+  @keyframes typingBlink {
+    0% { opacity: 0.2; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-2px); }
+    100% { opacity: 0.2; transform: translateY(0); }
+  }
+  

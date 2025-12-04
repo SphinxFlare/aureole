@@ -10,6 +10,7 @@ from sqlalchemy import select, and_, or_, delete, func, desc
 from services.ai_service import run_ai_profile_process
 from utils.match_logic import create_notification, generate_conversation_starters
 from sqlalchemy.future import select
+from utils.socket_manager import manager
 from models.user_model import User, Notification, UserMedia
 from models.message_model import Message
 from models.profile_model import Profile
@@ -101,7 +102,7 @@ async def get_user_matches(db: AsyncSession, user_id: str) -> List[Dict]:
             "imageUrl": image_url,
             "compatibility": round(match.score or 0.5, 2),
             "matched_at": match.matched_at or match.created_at,
-            "is_active": match_user.is_active,
+            "is_active": str(match_user.id) in manager.online_users,
             "is_verified": match_user.is_verified,
             "mutual_interests": mutual_interests,
             "common_values": common_values,

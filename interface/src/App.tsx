@@ -27,6 +27,8 @@ import Profile from "./pages/Profile";
 import NotificationsPage from "./pages/Notifications";
 import ViewProfile from "./pages/ViewProfile";
 import CallUI from "@/components/call/CallUI";
+import { initChatService, stopChatService, chatService } from "@/services/chatManager";
+
 
 const queryClient = new QueryClient();
 
@@ -37,12 +39,27 @@ function AppShell() {
   useEffect(() => {
     const userId = auth.user?.id;
     const token = auth.token;
-
-    if (!userId || !token) return;
-
-    const cs = getCallService(userId, token);
-    cs?.connect();
+  
+    // ----- CALL SERVICE -----
+    const cs = getCallService();
+  
+    if (!userId || !token) {
+      cs?.disconnect();
+      stopChatService();         // 🔥 also disconnect chat WS here
+      return;
+    }
+  
+    const newService = getCallService(userId, token);
+    newService.connect();
+  
+    // ----- CHAT SERVICE (missing before!) -----
+    if (!chatService) {
+      initChatService(userId);   // 🔥 this is the line you NEVER had
+    }
+  
   }, [auth.user?.id, auth.token]);
+  
+  
 
   return (
     <BrowserRouter>

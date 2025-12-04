@@ -1,7 +1,6 @@
-// src/pages/Chat/Chat.tsx
-
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useMemo, useCallback } from "react";
 
 import CosmicBackground from "@/components/CosmicBackground";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
@@ -34,21 +33,19 @@ import ChatImageZoom from "@/components/chat/ChatImageZoom";
 import { createVoiceRecorder } from "@/utils/voiceRecorder";
 import { sendVoiceMessage } from "@/utils/sendVoiceUpload";
 
-
 import { RootState } from "@/redux/store";
 import "@/components/chat/chat.css";
 import ReactionPicker from "@/components/chat/ReactionPicker";
-
 
 type ReactionTarget = {
   messageId: string;
   anchorRect: DOMRect;
 };
 
-
 const Chat = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  
   const { userId: partnerId } = useParams<{ userId: string }>();
 
   const { token, user } = useAppSelector((s: RootState) => s.auth);
@@ -62,10 +59,7 @@ const Chat = () => {
   const [showEmoji, setShowEmoji] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
-  // NEW: which message is currently being reacted to
-  // const [reactTargetId, setReactTargetId] = useState<string | null>(null);
   const [reactionTarget, setReactionTarget] = useState<ReactionTarget | null>(null);
-  // NEW: simple local deleted IDs so we don’t touch Redux
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
 
   const chatServiceRef = useRef<PersistentChatService | null>(null);
@@ -74,6 +68,11 @@ const Chat = () => {
 
   const recorderRef = useRef(createVoiceRecorder());
   const [isRecording, setIsRecording] = useState(false);
+
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<any>(null);
+  const messagesRef = useRef<typeof messages>([]);
+  messagesRef.current = messages;
 
 
   // ----------------------------------------------------------------
@@ -135,10 +134,16 @@ const Chat = () => {
         for (const raw of r.data) {
           if (cancel) return;
 
+          // ⬇️ map null content to moderation placeholder
+          const safeText =
+            raw.content === null || raw.content === undefined
+              ? "Message removed due to guidelines."
+              : raw.content;
+
           dispatch(
             addMessage({
               id: raw.id,
-              text: raw.content,
+              text: safeText,
               sender: raw.sender_id === user.id ? "user" : "other",
               timestamp: raw.created_at,
               is_delivered: raw.is_delivered,
@@ -169,92 +174,162 @@ const Chat = () => {
   }, [partnerId, user?.id]);
 
   // ----------------------------------------------------------------
-// WEBSOCKET SETUP (FULL LIFECYCLE SAFE)
-// ----------------------------------------------------------------
-useEffect(() => {
-  if (!user?.id) return;
+  // WEBSOCKET SETUP (FULL LIFECYCLE SAFE)
+  // ----------------------------------------------------------------
+  useEffect(() => {
+    if (!user?.id) return;
 
-  // Cleanup any previous instance
-  if (chatServiceRef.current) {
-    chatServiceRef.current.disconnect();
-    chatServiceRef.current = null;
-  }
+    // Cleanup any previous instance
+    if (chatServiceRef.current) {
+      chatServiceRef.current.disconnect();
+      chatServiceRef.current = null;
+    }
 
-  const svc = new PersistentChatService(user.id);
-  chatServiceRef.current = svc;
+    const svc = new PersistentChatService(user.id);
+    chatServiceRef.current = svc;
 
-  svc.connect();
-  dispatch(setConnected(true));
+    svc.connect();
+    dispatch(setConnected(true));
 
-  svc.onMessage((evt: EventMessage) => {
-    switch (evt.type) {
-      case "message":
-        dispatch(
-          addMessage({
-            id: evt.message_id,
-            text: evt.content,
-            sender: evt.sender_id === user.id ? "user" : "other",
-            timestamp: evt.timestamp ?? new Date().toISOString(),
-            is_delivered: true,
-            is_read: false,
-            sender_id: evt.sender_id,
-            receiver_id: evt.receiver_id,
-            partnerId:
-              evt.sender_id === user.id
-                ? evt.receiver_id
-                : evt.sender_id,
-            myUserId: user.id,
-          })
-        );
-        break;
+    svc.onMessage((evt: EventMessage) => {
+      switch (evt.type) {
+        case "message":
+          if (evt.content === null || evt.content === "") {
+            break;
+          }
+          dispatch(
+            addMessage({
+              id: evt.message_id,
+              text: evt.content,
+              sender: evt.sender_id === user.id ? "user" : "other",
+              timestamp: evt.timestamp ?? new Date().toISOString(),
+              is_delivered: true,
+              is_read: false,
+              sender_id: evt.sender_id,
+              receiver_id: evt.receiver_id,
+              partnerId:
+                evt.sender_id === user.id
+                  ? evt.receiver_id
+                  : evt.sender_id,
+              myUserId: user.id,
+            })
+          );
+          break;
 
-      case "delivery_receipt":
-        dispatch(markAsDelivered(evt.message_id));
-        break;
-
-      case "read_receipt":
-        evt.message_ids.forEach((id) => dispatch(markAsRead(id)));
-        break;
-
-      case "ai_suggestions":
-        dispatch(addAISuggestions(evt));
-        break;
-
-      case "message_deleted": {
-        const id = (evt as any).message_id;
-        if (id) {
-          setDeletedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+        // 🔥 MODERATION: overwrite existing message with placeholder
+        case "message_moderated": {
+          const { message_id, placeholder, sender_id, receiver_id } = evt;
+        
+          // Who sent the original?
+          const amSender = sender_id === user.id;
+        
+          // Determine correct partnerId (MUST MATCH how message was inserted originally)
+          const correctPartnerId =
+            sender_id === user.id ? receiver_id : sender_id;
+        
+          // Remove temp user messages
+          if (amSender) {
+            const tempIds = messagesRef.current
+              .filter((m) => m.id.startsWith("temp") && m.sender === "user")
+              .map((m) => m.id);
+        
+            if (tempIds.length > 0) {
+              setDeletedIds((prev) => [...prev, ...tempIds]);
+            }
+          }
+        
+          // DO NOT delete message_id — that hides the placeholder!
+          // Only remove temps.
+        
+          // Overwrite existing final UUID message
+          dispatch(
+            addMessage({
+              id: message_id,
+              text: placeholder,
+              sender: amSender ? "user" : "other",
+              timestamp: new Date().toISOString(),
+              is_delivered: true,
+              is_read: true,
+        
+              sender_id,
+              receiver_id,
+              partnerId: correctPartnerId,   // THE IMPORTANT FIX
+              myUserId: user.id,
+              message_type: "text",
+            })
+          );
+        
+          break;
         }
-        break;
-      }
+                
 
-      case "error":
-        dispatch(setError(evt.message));
-        break;
+        case "delivery_receipt":
+          dispatch(markAsDelivered(evt.message_id));
+          break;
+
+        case "read_receipt":
+          evt.message_ids.forEach((id) => dispatch(markAsRead(id)));
+          break;
+
+        case "ai_suggestions":
+          dispatch(addAISuggestions(evt));
+          break;
+
+        case "message_deleted": {
+          const id = (evt as any).message_id;
+          if (id) {
+            setDeletedIds((prev) =>
+              prev.includes(id) ? prev : [...prev, id]
+            );
+          }
+          break;
+        }
+
+        case "error":
+          dispatch(setError(evt.message));
+          break;
 
         case "message_reaction":
-          dispatch(updateReaction({
-            messageId: evt.message_id,
-            userId: evt.user_id,
-            reaction: evt.reaction,
-          }));
+          dispatch(
+            updateReaction({
+              messageId: evt.message_id,
+              userId: evt.user_id,
+              reaction: evt.reaction,
+            })
+          );
           break;
-        
+
         case "message_reaction_removed":
-          dispatch(removeReaction({
-            messageId: evt.message_id,
-            userId: evt.user_id,
-          }));
+          dispatch(
+            removeReaction({
+              messageId: evt.message_id,
+              userId: evt.user_id,
+            })
+          );
           break;
-        
-    }
-  });
 
-  return () => {
-    svc.disconnect();
-  };
-}, [user?.id]);   // 🔥 reconnects when user changes
+        case "typing":
+          if (evt.from === partnerId) {
+            setIsTyping(true);
+            clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => {
+              setIsTyping(false);
+            }, 2500);
+          }
+          break;
 
+        case "stop_typing":
+          if (evt.from === partnerId) {
+            setIsTyping(false);
+          }
+          break;
+      }
+    });
+
+    return () => {
+      svc.disconnect();
+    };
+  }, [user?.id, partnerId]); // ⬅️ removed `messages` from deps
 
   // ----------------------------------------------------------------
   // SCROLL
@@ -429,56 +504,77 @@ useEffect(() => {
   };
 
   const handleReact = (messageId: string, rect: DOMRect) => {
-  setReactionTarget({ messageId, anchorRect: rect });
-};
+    setReactionTarget({ messageId, anchorRect: rect });
+  };
 
+  const handleReactionSelect = async (reaction: string) => {
+    if (!reactionTarget) return;
 
-const handleReactionSelect = async (reaction: string) => {
-  if (!reactionTarget) return;
+    try {
+      await messageActions.reactMessage(reactionTarget.messageId, reaction);
+    } catch (err) {
+      console.error("Failed to react to message", err);
+    } finally {
+      setReactionTarget(null);
+    }
+  };
 
-  try {
-    await messageActions.reactMessage(reactionTarget.messageId, reaction);
-  } catch (err) {
-    console.error("Failed to react to message", err);
-  } finally {
-    setReactionTarget(null);
+  const handleDeleteStable = useCallback(handleDelete, []);
+  const handleReactStable = useCallback(handleReact, []);
+
+  const lastTypingRef = useRef(0);
+
+const onTypingStable = useCallback(() => {
+  const now = Date.now();
+
+  // send "typing" only every 500ms
+  if (now - lastTypingRef.current > 500) {
+    chatServiceRef.current?.sendTyping(partnerId);
+    lastTypingRef.current = now;
   }
-};
 
+  clearTimeout(typingTimeoutRef.current);
+  typingTimeoutRef.current = setTimeout(() => {
+    chatServiceRef.current?.stopTyping(partnerId);
+  }, 2500);
+}, [partnerId]);
 
-const closeReactionModal = () => setReactionTarget(null);
+  
+  const closeReactionModal = () => setReactionTarget(null);
 
   // Filter out locally deleted messages from view only
-  const visibleMessages = messages.filter(
-    (m) => !deletedIds.includes(m.id)
+  const visibleMessages = useMemo(
+    () => messages.filter(m => !deletedIds.includes(m.id)),
+    [messages, deletedIds]
   );
+  
 
   const startRecording = async (waveCb: (v: number) => void) => {
     console.log("🎤 startRecording() CALLED");
     await recorderRef.current.start(waveCb);
   };
-  
+
   const stopRecording = async (cancelled: boolean) => {
     console.log("🛑 stopRecording() CALLED, cancelled?", cancelled);
     const blob = await recorderRef.current.stop();
-  
+
     console.log("📦 blob produced:", blob, blob.size);
-  
+
     // Reject silent or too small
     if (cancelled || blob.size < 300) {
       console.log("⚠️ Voice cancelled or too small, ignoring");
       return;
     }
-  
+
     if (!partnerId || !chatServiceRef.current) return;
-  
+
     const uploaded = await sendVoiceMessage(partnerId, blob, chatServiceRef.current);
-  
+
     console.log("📨 voice uploaded + WS sent", uploaded);
-  
+
     // Immediately show pending message
     const tempId = `temp-voice-${Date.now()}`;
-  
+
     dispatch(
       addMessage({
         id: tempId,
@@ -497,7 +593,7 @@ const closeReactionModal = () => setReactionTarget(null);
         thumb_url: uploaded.thumb,
       })
     );
-  };    
+  };
 
   // ----------------------------------------------------------------
   // UI
@@ -517,9 +613,10 @@ const closeReactionModal = () => setReactionTarget(null);
         sendAI={sendAI}
         setZoomedImage={setZoomedImage}
         endRef={messagesEndRef}
-        handleDelete={handleDelete}
-        handleReact={handleReact}
+        handleDelete={handleDeleteStable}
+        handleReact={handleReactStable}
         currentUserId={user.id}
+        isTyping={isTyping}
       />
 
       <ChatInput
@@ -533,6 +630,7 @@ const closeReactionModal = () => setReactionTarget(null);
         startRecording={startRecording}
         stopRecording={stopRecording}
         isRecording={isRecording}
+        onTyping={onTypingStable}
       />
 
       <ChatEmojiDrawer
@@ -554,7 +652,6 @@ const closeReactionModal = () => setReactionTarget(null);
           onClose={closeReactionModal}
         />
       )}
-
     </div>
   );
 };

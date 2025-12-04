@@ -5,6 +5,7 @@ import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/redux/store";
+import { stopChatService } from "@/services/chatManager";
 import { useState } from "react";
 import { useAppDispatch } from "@/redux/hooks";
 import { clearAuth } from "@/redux/slices/authSlice";
@@ -24,13 +25,18 @@ const BottomNav = () => {
 
   const handleLogout = async () => {
     try {
-      await logoutAll(token);
+      stopChatService();              // 🔥 REQUIRED: closes WebSocket immediately
+  
+      await logoutAll(token);         // backend logout
     } catch {}
-
-    dispatch(clearAuth());
+  
+    // dispatch(clearChat());            // optional: reset chat state
+    dispatch(clearAuth());            // clear Redux + localStorage
+  
     toast({ title: "Logged out", description: "Session cleared." });
     navigate("/auth");
   };
+  
 
   const navItems = [
     { to: "/discovery", icon: Compass, label: "Discovery", type: "nav" },

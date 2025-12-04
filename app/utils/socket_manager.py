@@ -10,20 +10,24 @@ from utils.ws_safe import safe_payload
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.online_users: set[str] = set()
         self._lock = asyncio.Lock()
 
     async def connect(self, user_id: str, websocket: WebSocket):
         await websocket.accept()
         async with self._lock:
             self.active_connections.setdefault(user_id, []).append(websocket)
+            self.online_users.add(user_id)
         print(f"🔌 {user_id} connected ({len(self.active_connections[user_id])} sockets)")
 
     async def disconnect(self, user_id: str, websocket: WebSocket):
+        print("🔥 BACKEND DISCONNECT FIRED FOR:", user_id)
         async with self._lock:
             conns = self.active_connections.get(user_id, [])
             self.active_connections[user_id] = [ws for ws in conns if ws != websocket]
             if not self.active_connections[user_id]:
                 self.active_connections.pop(user_id, None)
+                self.online_users.discard(user_id) 
         print(f"❌ {user_id} disconnected ({len(self.active_connections.get(user_id, []))} remaining)")
 
     async def send_personal_message(self, user_id: str, message: dict) -> bool:

@@ -1,9 +1,11 @@
 # router/message_router.py
 
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 from sqlalchemy import select
 from models.message_model import Message, ChatMedia
+from moderation import schedule_post_moderation
 from services.ai_service import (
     generate_ai_replies_service,
     send_ai_reply_service,
@@ -44,7 +46,6 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                     if websocket.client_state != WebSocketState.CONNECTED:
                         break
 
-                    # fetch media paths if needed
                     media_url = None
                     thumb_url = None
 
@@ -117,22 +118,27 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
             print(f"📥 {user_id} → {event_type}: {data}")
 
             # ---------------------------------------------------
-            # 🎯 Send normal or media message
+            # 🎯 Send normal or media message (PATCHED SAFELY)
             # ---------------------------------------------------
             if event_type == "message":
                 try:
                     receiver_id = data["receiver_id"]
                     message_type = data.get("message_type", "text")
-                    content = (data.get("content") or "").strip()
+                    raw_content = data.get("content")
                     media_id = data.get("media_id")
 
-                    if message_type == "text" and not content:
+                    if raw_content is None:
                         await websocket.send_json({
                             "type": "error",
-                            "message": "Empty text message"
+                            "message": "Missing content field"
                         })
                         continue
 
+                    content = raw_content if isinstance(raw_content, str) else str(raw_content)
+
+                    # -----------------------------
+                    # 1️⃣ SAVE MESSAGE (DB ONLY)
+                    # -----------------------------
                     async with async_session() as db:
                         new_msg = await send_user_message_service(
                             db,
@@ -143,11 +149,14 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                             media_id=media_id,
                         )
 
-                        # fetch media paths
-                        media_url = None
-                        thumb_url = None
+                    # -----------------------------
+                    # 2️⃣ FETCH MEDIA (NO DB WRITE)
+                    # -----------------------------
+                    media_url = None
+                    thumb_url = None
 
-                        if media_id:
+                    if media_id:
+                        async with async_session() as db:
                             m = (
                                 await db.execute(
                                     select(ChatMedia).where(ChatMedia.id == media_id)
@@ -157,42 +166,60 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                                 media_url = m.file_path
                                 thumb_url = m.thumb_path
 
-                        payload = safe_payload({
-                            "type": "message",
+                    # -----------------------------
+                    # 3️⃣ WS PAYLOAD OUTSIDE DB
+                    # -----------------------------
+                    payload = safe_payload({
+                        "type": "message",
+                        "message_id": str(new_msg.id),
+                        "sender_id": str(user_id),
+                        "receiver_id": str(receiver_id),
+                        "content": content,
+                        "message_type": message_type,
+                        "media_id": media_id,
+                        "media_url": media_url,
+                        "thumb_url": thumb_url,
+                        "timestamp": new_msg.created_at.isoformat() if new_msg.created_at else None,
+                    })
+
+                    sent = await manager.send_personal_message(
+                        str(receiver_id), payload
+                    )
+
+                    # -----------------------------
+                    # 4️⃣ UPDATE DELIVERY STATUS
+                    # -----------------------------
+                    if sent:
+                        async with async_session() as db:
+                            msg_row = await db.get(Message, new_msg.id)
+                            msg_row.is_delivered = True
+                            await db.commit()
+
+                        await manager.send_personal_message(str(user_id), {
+                            "type": "delivery_receipt",
                             "message_id": str(new_msg.id),
-                            "sender_id": str(user_id),
-                            "receiver_id": str(receiver_id),
-                            "content": content,
-                            "message_type": message_type,
-                            "media_id": media_id,
-                            "media_url": media_url,
-                            "thumb_url": thumb_url,
-                            "timestamp": new_msg.created_at.isoformat() if new_msg.created_at else None,
                         })
 
-                        sent = await manager.send_personal_message(
-                            str(receiver_id), payload
+                    else:
+                        print(f"📭 Receiver {receiver_id} offline → queued")
+
+                    # -----------------------------
+                    # 5️⃣ Post-delivery moderation
+                    # -----------------------------
+                    if message_type == "text" and content:
+                        schedule_post_moderation(
+                            message_id=new_msg.id,
+                            content=content,
+                            receiver_id=receiver_id,
+                            sender_id=user_id,
                         )
-
-                        if sent:
-                            new_msg.is_delivered = True
-                            await db.commit()
-                            await db.refresh(new_msg)
-
-                            await manager.send_personal_message(str(user_id), {
-                                "type": "delivery_receipt",
-                                "message_id": str(new_msg.id),
-                            })
-
-                        else:
-                            print(f"📭 Receiver {receiver_id} offline → queued")
 
                 except Exception as e:
                     print(f"💥 Error sending message: {e}")
                     await websocket.send_json({"type": "error", "message": str(e)})
 
             # ---------------------------------------------------
-            # Other existing handlers (UNCHANGED)
+            # AI suggestions
             # ---------------------------------------------------
             elif event_type == "ai_request":
                 try:
@@ -226,6 +253,9 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                     print(f"💥 AI request failed: {e}")
                     await websocket.send_json({"type": "error", "message": str(e)})
 
+            # ---------------------------------------------------
+            # AI reply selected
+            # ---------------------------------------------------
             elif event_type == "ai_selected":
                 try:
                     receiver_id = data["receiver_id"]
@@ -236,31 +266,35 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                             db, sender_id=user_id, receiver_id=receiver_id, content=content
                         )
 
-                        payload = safe_payload({
-                            "type": "message",
-                            "message_id": str(new_msg.id),
-                            "sender_id": str(user_id),
-                            "receiver_id": str(receiver_id),
-                            "content": content,
-                            "timestamp": new_msg.created_at.isoformat() if new_msg.created_at else None,
-                        })
+                    payload = safe_payload({
+                        "type": "message",
+                        "message_id": str(new_msg.id),
+                        "sender_id": str(user_id),
+                        "receiver_id": str(receiver_id),
+                        "content": content,
+                        "timestamp": new_msg.created_at.isoformat() if new_msg.created_at else None,
+                    })
 
-                        sent = await manager.send_personal_message(str(receiver_id), payload)
+                    sent = await manager.send_personal_message(str(receiver_id), payload)
 
-                        if sent:
-                            new_msg.is_delivered = True
+                    if sent:
+                        async with async_session() as db:
+                            msg_row = await db.get(Message, new_msg.id)
+                            msg_row.is_delivered = True
                             await db.commit()
-                            await db.refresh(new_msg)
 
-                            await manager.send_personal_message(str(user_id), {
-                                "type": "delivery_receipt",
-                                "message_id": str(new_msg.id),
-                            })
+                        await manager.send_personal_message(str(user_id), {
+                            "type": "delivery_receipt",
+                            "message_id": str(new_msg.id),
+                        })
 
                 except Exception as e:
                     print(f"💥 AI reply failed: {e}")
                     await websocket.send_json({"type": "error", "message": str(e)})
 
+            # ---------------------------------------------------
+            # Read receipts
+            # ---------------------------------------------------
             elif event_type == "read_receipt":
                 try:
                     ids = data.get("message_ids", [])
@@ -287,6 +321,28 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                 except Exception as e:
                     print(f"💥 Read receipt error: {e}")
 
+            # ---------------------------------------------------
+            # Typing indicator
+            # ---------------------------------------------------
+            elif event_type == "typing":
+                receiver_id = data.get("receiver_id")
+                if receiver_id:
+                    await manager.send_personal_message(
+                        str(receiver_id),
+                        {"type": "typing", "from": user_id}
+                    )
+
+            # ---------------------------------------------------
+            # Stop typing
+            # ---------------------------------------------------
+            elif event_type == "stop_typing":
+                receiver_id = data.get("receiver_id")
+                if receiver_id:
+                    await manager.send_personal_message(
+                        str(receiver_id),
+                        {"type": "stop_typing", "from": user_id}
+                    )
+
             else:
                 await websocket.send_json({
                     "type": "error",
@@ -300,4 +356,5 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
         pass
 
     finally:
+        print("🔥 ROUTER FINALLY REACHED FOR:", user_id)
         await manager.disconnect(user_id, websocket)

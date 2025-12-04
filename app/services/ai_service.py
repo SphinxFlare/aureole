@@ -226,7 +226,8 @@ async def send_user_message_service(
     message_type: str = "text",
     media_id: str = None
 ):
-    # 🚫 1) BLOCK CHECK (before inserting message)
+    print("SERVICE INPUT content =", repr(content))
+
     await assert_can_send(db, sender_id, receiver_id)
 
     new_msg = Message(
@@ -244,7 +245,6 @@ async def send_user_message_service(
     await db.commit()
     await db.refresh(new_msg)
 
-    # notification preview
     preview_map = {
         "text": content,
         "image": "📷 Photo",
@@ -262,5 +262,7 @@ async def send_user_message_service(
         actor_id=sender_id,
         message_preview=preview,
     )
+
+    print("SERVICE AFTER SAVE new_msg.content =", repr(new_msg.content))
 
     return new_msg

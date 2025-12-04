@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
+from datetime import datetime, timezone
 from sqlalchemy import select,delete
 from services.match_service import create_match
 from models.user_model import Notification, User
@@ -234,6 +235,7 @@ async def unblock_user(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    # 1️⃣ Locate block row
     row = await db.scalar(
         select(UserBlock).where(
             (UserBlock.blocker_id == current_user.id) &
@@ -244,7 +246,34 @@ async def unblock_user(
     if not row:
         return {"status": "not_blocked"}
 
+    # 2️⃣ Delete block row
     await db.delete(row)
+
+    # 3️⃣ Restore match rows (reactivate match + mutual = True)
+    now = datetime.now(timezone.utc)
+
+    matches = (await db.execute(
+        select(Match).where(
+            (
+                (Match.user_id == current_user.id) & (Match.target_id == str(blocked_id))
+            ) | (
+                (Match.user_id == str(blocked_id)) & (Match.target_id == current_user.id)
+            )
+        )
+    )).scalars().all()
+
+    # Restore match behavior
+    for match in matches:
+        match.is_active = True
+        match.is_mutual = True
+        match.unmatched_at = None
+        match.reason = None
+        match.matched_at = match.matched_at or now
+        db.add(match)
+
     await db.commit()
 
-    return {"status": "unblocked", "unblocked_user": str(blocked_id)}
+    return {
+        "status": "unblocked_and_matched_restored",
+        "unblocked_user": str(blocked_id)
+    }

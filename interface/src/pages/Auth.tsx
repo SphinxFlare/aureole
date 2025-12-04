@@ -11,6 +11,10 @@ import { login as loginService, signup as signupService, checkProfileStatus } fr
 import { jwtDecode } from "jwt-decode";
 import { useDispatch } from "react-redux";
 import { setAuth } from "@/redux/slices/authSlice";
+import Loader from "@/components/Loader";
+import { initChatService } from "@/services/chatManager";
+
+
 
 
 const Auth = () => {
@@ -45,6 +49,9 @@ const Auth = () => {
   
         // 3) Check profile status (LIGHTWEIGHT)
         const status = await checkProfileStatus(access_token);
+
+        // 2.5) START CHAT WEBSOCKET  🚀
+        initChatService(user.id); 
   
         if (status.exists) {
           toast({
@@ -87,6 +94,8 @@ const Auth = () => {
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-black text-white">
+
+      {loading && <Loader />} 
 
       {/* CYAN / AQUA Aurora Background */}
       <div className="
